@@ -1,0 +1,78 @@
+version: '3.8'
+
+# ============================================================
+# 실행 방법: docker compose up --build
+# 종료 방법: docker compose down
+# 로그 확인: docker compose logs -f
+# 앱 로그만: docker compose logs -f app
+#
+# 포함 서비스:
+#   - app     : Spring Boot 앱 (8080포트)
+#   - MySQL 8.0  : localhost:3306 (cashback_db)
+#   - Redis 7.2  : localhost:6379 (Redisson 분산 락 전용)
+#
+# [주의] 최초 실행 또는 코드 변경 후에는 --build 옵션 필수
+#         docker compose up --build
+# [변경] MySQL 비밀번호 변경 시 아래 environment 항목만 수정하면 됩니다
+#         (application.yml은 환경변수로 자동 주입되므로 수정 불필요)
+# ============================================================
+
+services:
+  # ======================== Spring Boot 앱 ========================
+  app:
+    build: .                            # 프로젝트 루트의 Dockerfile로 빌드
+    container_name: cashback-app
+    ports:
+      - "8080:8080"                     # [변경] 포트 충돌 시 좌측 포트 변경 (예: "8081:8080")
+    environment:
+      # application.yml의 ${환경변수:기본값} 으로 주입
+      # Docker 내부 네트워크에서는 서비스명(mysql, redis)이 호스트명으로 동작
+      DB_HOST: mysql                    # MySQL 컨테이너 서비스명
+      DB_PORT: 3306
+      DB_USERNAME: cashback_user        # [변경] 아래 MySQL MYSQL_USER와 동일하게
+      DB_PASSWORD: cashback_pass        # [변경] 아래 MySQL MYSQL_PASSWORD와 동일하게
+      REDIS_HOST: redis                 # Redis 컨테이너 서비스명
+      REDIS_PORT: 6379
+    depends_on:
+      mysql:
+        condition: service_healthy      # MySQL 헬스체크 통과 후 앱 시작 (DB 준비 전 실행 방지)
+      redis:
+        condition: service_healthy      # Redis 헬스체크 통과 후 앱 시작
+    restart: unless-stopped
+
+  # ======================== MySQL ========================
+  mysql:
+    image: mysql:8.0                      # [변경] MySQL 버전 변경 시 이 값 수정
+    container_name: cashback-mysql
+    restart: unless-stopped               # 비정상 종료 시 자동 재시작
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword   # [변경] root 비밀번호 (운영 환경에서는 반드시 변경)
+      MYSQL_DATABASE: cashback_db         # [변경] 데이터베이스 이름
+      MYSQL_USER: cashback_user           # [변경] 애플리케이션 접속 계정명
+      MYSQL_PASSWORD: cashback_pass       # [변경] 애플리케이션 접속 비밀번호 (application.yml과 동일)
+      TZ: Asia/Seoul                      # 서울 타임존 설정 (created_at 등 시각 정합성)
+    ports:
+      - "3306:3306"                       # [변경] 로컬 포트 충돌 시 좌측 포트 변경 (예: "3307:3306")
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 10s                       # 10초마다 헬스체크
+      timeout: 5s                         # 5초 이내 응답 없으면 실패
+      retries: 5                          # 5회 실패 시 unhealthy 처리
+      start_period: 30s                   # 컨테이너 시작 후 30초 유예 (MySQL 초기화 시간 고려)
+
+  # ======================== Redis ========================
+  redis:
+    image: redis:7.2                      # [변경] Redis 버전 변경 시 이 값 수정
+    container_name: cashback-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"                       # [변경] 로컬 포트 충돌 시 좌측 포트 변경 (예: "6380:6379")
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    # maxmemory: Redis 최대 메모리 256MB 제한 (Redisson 락 키는 매우 작으므로 충분)
+    # allkeys-lru: 메모리 초과 시 가장 오래된 키부터 제거
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+

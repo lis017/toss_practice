@@ -1,0 +1,65 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.2.3'
+    id 'io.spring.dependency-management' version '1.1.4'
+}
+
+group = 'com.toss'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    sourceCompatibility = '17' // Java 17 사용 (Spring Boot 3.x 최소 요구사항)
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // ======================== Spring Boot 핵심 ========================
+    implementation 'org.springframework.boot:spring-boot-starter-web'            // REST API 처리
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'       // JPA/Hibernate ORM
+    implementation 'org.springframework.boot:spring-boot-starter-validation'     // @Valid, @NotNull 등 입력값 검증
+
+    // ======================== 모니터링 ========================
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'       // /actuator/health 헬스체크용
+
+    // ======================== Redisson (분산 락) ========================
+    // Spring Boot Starter 대신 직접 사용하여 커스텀 설정 완전 제어
+    // 이유: redisson-spring-boot-starter는 자동 설정 시 커스텀 옵션 제한 있음
+    implementation 'org.redisson:redisson:3.27.0'
+
+    // ======================== 데이터베이스 ========================
+    runtimeOnly 'com.mysql:mysql-connector-j'                                    // MySQL 8.0 드라이버
+
+    // ======================== AOP ========================
+    implementation 'org.springframework.boot:spring-boot-starter-aop'           // Resilience4j Circuit Breaker 동작에 필요
+
+    // ======================== Circuit Breaker (Resilience4j) ========================
+    // 외부 은행 API 반복 실패 시 서킷 Open → 즉시 차단으로 불필요한 재시도 + 보상 트랜잭션 반복 방지
+    // [주의] resilience4j는 spring-boot-starter-aop 의존성이 반드시 필요 (위에 선언됨)
+    // [변경] 버전은 Spring Boot 3.2.x와 호환되는 2.2.x 사용
+    implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.2.0'
+
+    // ======================== 편의 라이브러리 ========================
+    compileOnly 'org.projectlombok:lombok'                                       // 보일러플레이트 코드 제거
+    annotationProcessor 'org.projectlombok:lombok'
+
+    // ======================== 테스트 ========================
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'       // JUnit5, Mockito 포함
+    testImplementation 'com.h2database:h2'                                       // 인메모리 DB (테스트용)
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+}
+
+test {
+    useJUnitPlatform() // JUnit5 플랫폼 사용
+    // Windows 터미널 한글 깨짐 방지 (기본 CP949 → UTF-8 강제 설정)
+    jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8'
+}

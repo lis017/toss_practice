@@ -1,0 +1,34 @@
+spring:
+  # 테스트용 인메모리 H2 DB 설정 (실제 MySQL 불필요)
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=MySQL;DB_CLOSE_DELAY=-1;NON_KEYWORDS=USER
+    # MODE=MySQL: H2가 MySQL 방언으로 동작 (MySQL과 유사한 SQL 지원)
+    # DB_CLOSE_DELAY=-1: 마지막 커넥션 종료 후에도 DB 유지
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop             # 테스트 시작 시 스키마 생성, 종료 시 삭제
+    database-platform: org.hibernate.dialect.H2Dialect
+    show-sql: true                      # 테스트 중 SQL 출력 (디버깅 편의)
+    properties:
+      hibernate:
+        format_sql: true
+
+# 테스트에서는 Redisson을 MockBean으로 교체하므로 Redis 연결 불필요
+redis:
+  host: localhost
+  port: 6379
+
+cashback:
+  budget:
+    total: 100000000
+  external-bank:
+    simulate-delay: false
+    simulate-error: false
+    timeout-seconds: 3
+
+logging:
+  level:
+    com.toss.cashback: DEBUG
