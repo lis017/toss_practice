@@ -159,7 +159,7 @@ feat: 결제 API 엔드포인트 및 초기 데이터 구현
 ```
 **파일:** `PaymentController`, `PaymentRequest`, `PaymentResponse`, `DataInitializer`
 
-**체크:** `./gradlew build` 통과 + `docker compose up` 후 로그에 `[초기화]` 확인
+**체크:** `./gradlew build` 통과 + `docker compose up` 후 로그에 `[init]` 확인
 
 ---
 

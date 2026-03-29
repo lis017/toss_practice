@@ -74,6 +74,8 @@ public class PaymentService {
                     PaymentTransaction saved = transactionRepository.save(transaction);
                     log.info("[TX1] 이체 완료 - txId={}, from={}, to={}, amount={}",
                             saved.getId(), fromAccountId, toAccountId, amount);
+                    log.info("[TX1] transfer done - txId={}, from={}, to={}, amount={}",
+                            saved.getId(), fromAccountId, toAccountId, amount);
 
                     return saved.getId();
                 })
@@ -86,6 +88,7 @@ public class PaymentService {
      */
     public void compensate(Long transactionId) {
         log.warn("[TX2] 보상 트랜잭션 시작 - txId={}", transactionId);
+        log.warn("[TX2] compensation start - txId={}", transactionId);
 
         // 락 키 결정을 위한 사전 조회 (락 외부 - 읽기 전용)
         PaymentTransaction txInfo = transactionRepository.findById(transactionId)
@@ -118,6 +121,7 @@ public class PaymentService {
                 tx.markCompensated("외부 은행 API 실패로 인한 보상 트랜잭션 처리 완료");
 
                 log.warn("[TX2] 보상 트랜잭션 완료 - txId={}, amount={}원 원복", transactionId, amount);
+                log.warn("[TX2] compensation done - txId={}, amount={} KRW restored", transactionId, amount);
                 return null;
             });
             return null;
@@ -131,5 +135,6 @@ public class PaymentService {
                 .orElseThrow(() -> new CustomException(ErrorCode.INTERNAL_SERVER_ERROR));
         transaction.markSuccess(cashbackAmount);
         log.info("[TX3] 트랜잭션 성공 처리 - txId={}, cashback={}", transactionId, cashbackAmount);
+        log.info("[TX3] mark success - txId={}, cashback={}", transactionId, cashbackAmount);
     }
 }

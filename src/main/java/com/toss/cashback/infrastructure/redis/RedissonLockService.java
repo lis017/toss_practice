@@ -41,10 +41,12 @@ public class RedissonLockService {
 
             if (!isAcquired) {
                 log.warn("[RedissonLock] 락 획득 실패 - key={}", lockKey);
+                log.warn("[RedissonLock] lock acquire failed - key={}", lockKey);
                 throw new CustomException(ErrorCode.LOCK_ACQUISITION_FAILED);
             }
 
             log.debug("[RedissonLock] 락 획득 - key={}", lockKey);
+            log.debug("[RedissonLock] lock acquired - key={}", lockKey);
             return task.call();
 
         } catch (CustomException e) {
@@ -53,10 +55,12 @@ public class RedissonLockService {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.error("[RedissonLock] 인터럽트 발생 - key={}", lockKey);
+            log.error("[RedissonLock] interrupted - key={}", lockKey);
             throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
 
         } catch (Exception e) {
             log.error("[RedissonLock] 예외 발생 - key={}, error={}", lockKey, e.getMessage());
+            log.error("[RedissonLock] error - key={}, error={}", lockKey, e.getMessage());
             throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
 
         } finally {
@@ -64,6 +68,7 @@ public class RedissonLockService {
             if (lock.isHeldByCurrentThread()) {
                 lock.unlock();
                 log.debug("[RedissonLock] 락 해제 - key={}", lockKey);
+                log.debug("[RedissonLock] lock released - key={}", lockKey);
             }
         }
     }
@@ -89,10 +94,12 @@ public class RedissonLockService {
 
             if (!isAcquired) {
                 log.warn("[RedissonMultiLock] 락 획득 실패 - keys={}", lockKeys);
+                log.warn("[RedissonMultiLock] lock acquire failed - keys={}", lockKeys);
                 throw new CustomException(ErrorCode.LOCK_ACQUISITION_FAILED);
             }
 
             log.debug("[RedissonMultiLock] 락 획득 - keys={}", lockKeys);
+            log.debug("[RedissonMultiLock] locks acquired - keys={}", lockKeys);
             return task.call();
 
         } catch (CustomException e) {
@@ -101,16 +108,19 @@ public class RedissonLockService {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.error("[RedissonMultiLock] 인터럽트 발생 - keys={}", lockKeys);
+            log.error("[RedissonMultiLock] interrupted - keys={}", lockKeys);
             throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
 
         } catch (Exception e) {
             log.error("[RedissonMultiLock] 예외 발생 - keys={}, error={}", lockKeys, e.getMessage());
+            log.error("[RedissonMultiLock] error - keys={}, error={}", lockKeys, e.getMessage());
             throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
 
         } finally {
             if (multiLock.isHeldByCurrentThread()) {
                 multiLock.unlock();
                 log.debug("[RedissonMultiLock] 락 해제 - keys={}", lockKeys);
+                log.debug("[RedissonMultiLock] locks released - keys={}", lockKeys);
             }
         }
     }

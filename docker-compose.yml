@@ -52,7 +52,7 @@ services:
       MYSQL_PASSWORD: cashback_pass       # [변경] 애플리케이션 접속 비밀번호 (application.yml과 동일)
       TZ: Asia/Seoul                      # 서울 타임존 설정 (created_at 등 시각 정합성)
     ports:
-      - "3306:3306"                       # [변경] 로컬 포트 충돌 시 좌측 포트 변경 (예: "3307:3306")
+      - "3306:3306"                       # [변경] 호스트:컨테이너 포트 매핑
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
       interval: 10s                       # 10초마다 헬스체크

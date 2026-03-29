@@ -131,6 +131,7 @@ class CashbackConcurrencyTest {
                     }
                 } catch (Exception e) {
                     log.warn("[테스트] 예외 - accountId={}, msg={}", accountId, e.getMessage());
+                    log.warn("[test] exception - accountId={}, msg={}", accountId, e.getMessage());
                 } finally {
                     endLatch.countDown();
                 }
@@ -145,6 +146,8 @@ class CashbackConcurrencyTest {
 
         long totalGranted = grantedAmounts.stream().mapToLong(Long::longValue).sum();
         log.info("[결과] 총 요청={}, 성공={}, 총 지급={}원, 예산={}원",
+                totalRequests, successCount.get(), totalGranted, testBudget);
+        log.info("[result] totalRequests={}, success={}, totalGranted={} KRW, budget={} KRW",
                 totalRequests, successCount.get(), totalGranted, testBudget);
 
         // [핵심 검증] 총 지급 금액이 예산을 절대 초과하지 않아야 함
@@ -185,6 +188,7 @@ class CashbackConcurrencyTest {
                     else exhaustedCount.incrementAndGet();
                 } catch (Exception e) {
                     log.warn("[테스트] 예외 - accountId={}", accountId);
+                    log.warn("[test] exception - accountId={}", accountId);
                 } finally {
                     endLatch.countDown();
                 }
@@ -197,6 +201,7 @@ class CashbackConcurrencyTest {
 
         CashbackBudget finalBudget = cashbackBudgetRepository.findTop().orElseThrow();
         log.info("[결과] 지급={}, 소진={}, usedBudget={}", grantedCount.get(), exhaustedCount.get(), finalBudget.getUsedBudget());
+        log.info("[result] granted={}, exhausted={}, usedBudget={}", grantedCount.get(), exhaustedCount.get(), finalBudget.getUsedBudget());
 
         assertThat(finalBudget.getUsedBudget()).isLessThanOrEqualTo(testBudget); // 예산 초과 없음
         assertThat(grantedCount.get() + exhaustedCount.get()).isEqualTo(totalRequests); // 전체 요청 처리 완료

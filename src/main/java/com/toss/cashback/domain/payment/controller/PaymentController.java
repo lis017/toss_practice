@@ -42,6 +42,8 @@ public class PaymentController {
     public ResponseEntity<PaymentResponse> pay(@RequestBody @Valid PaymentRequest request) {
         // @Valid: fromAccountId(NotNull), toAccountId(NotNull), amount(NotNull+Positive) 검증
         // 검증 실패 시 GlobalExceptionHandler.handleValidationException() 자동 호출
+        log.info("[API] POST /api/v1/payments 결제 요청 - from={}, to={}, amount={}",
+                request.getFromAccountId(), request.getToAccountId(), request.getAmount());
         log.info("[API] POST /api/v1/payments - from={}, to={}, amount={}",
                 request.getFromAccountId(), request.getToAccountId(), request.getAmount());
 

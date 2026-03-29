@@ -42,12 +42,14 @@ public class MockExternalBankService implements ExternalBankService {
     @CircuitBreaker(name = "externalBankService", fallbackMethod = "approveFallback")
     public void approve(Long accountId, Long amount) {
         log.info("[외부 은행 API] 승인 요청 시작 - accountId={}, amount={}", accountId, amount);
+        log.info("[external-bank] approve start - accountId={}, amount={}", accountId, amount);
 
         // 별도 스레드에서 실행해야 get()으로 타임아웃을 걸 수 있습니다
         CompletableFuture<Void> apiFuture = CompletableFuture.runAsync(() -> {
             try {
                 if (simulateDelay) {
                     log.warn("[외부 은행 API] 지연 시뮬레이션 - {}초 대기", SIMULATED_DELAY_SECONDS);
+                    log.warn("[external-bank] simulate delay - sleep {}s", SIMULATED_DELAY_SECONDS);
                     Thread.sleep(SIMULATED_DELAY_SECONDS * 1000L);
                 }
                 if (simulateError) {
@@ -55,6 +57,7 @@ public class MockExternalBankService implements ExternalBankService {
                 }
                 Thread.sleep(100); // 실제 HTTP 통신 시간 모의 (실제 구현 시 WebClient로 교체)
                 log.info("[외부 은행 API] 승인 완료 - accountId={}", accountId);
+                log.info("[external-bank] approve done - accountId={}", accountId);
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -65,20 +68,24 @@ public class MockExternalBankService implements ExternalBankService {
         try {
             apiFuture.get(timeoutSeconds, TimeUnit.SECONDS);
             log.info("[외부 은행 API] 정상 응답 완료 - accountId={}", accountId);
+            log.info("[external-bank] response ok - accountId={}", accountId);
 
         } catch (TimeoutException e) {
             apiFuture.cancel(true);                             // 진행 중인 작업 강제 취소
             log.error("[외부 은행 API] 타임아웃 - {}초 초과, accountId={}", timeoutSeconds, accountId);
+            log.error("[external-bank] timeout after {}s - accountId={}", timeoutSeconds, accountId);
             throw new CustomException(ErrorCode.EXTERNAL_BANK_TIMEOUT); // → 서킷 실패 카운트 증가
 
         } catch (ExecutionException e) {
             apiFuture.cancel(true);
             log.error("[외부 은행 API] 오류 - accountId={}, error={}", accountId, e.getCause().getMessage());
+            log.error("[external-bank] error - accountId={}, error={}", accountId, e.getCause().getMessage());
             throw new CustomException(ErrorCode.EXTERNAL_BANK_ERROR);   // → 서킷 실패 카운트 증가
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.error("[외부 은행 API] 인터럽트 - accountId={}", accountId);
+            log.error("[external-bank] interrupted - accountId={}", accountId);
             throw new CustomException(ErrorCode.EXTERNAL_BANK_ERROR);
         }
     }
@@ -86,10 +93,12 @@ public class MockExternalBankService implements ExternalBankService {
     private void approveFallback(Long accountId, Long amount, Throwable throwable) {
         if (throwable instanceof CallNotPermittedException) {
             log.warn("[서킷 브레이커] OPEN 상태 - 즉시 차단, accountId={}", accountId);
+            log.warn("[circuit-breaker] OPEN - short-circuit, accountId={}", accountId);
             throw new CustomException(ErrorCode.CIRCUIT_BREAKER_OPEN);
         }
         // 서킷 오픈 외 예외: 원본 예외 그대로 전파 (보상 트랜잭션이 정상 동작해야 함)
         log.error("[서킷 브레이커] Fallback - accountId={}, cause={}", accountId, throwable.getMessage());
+        log.error("[circuit-breaker] fallback - accountId={}, cause={}", accountId, throwable.getMessage());
         if (throwable instanceof CustomException) {
             throw (CustomException) throwable;
         }

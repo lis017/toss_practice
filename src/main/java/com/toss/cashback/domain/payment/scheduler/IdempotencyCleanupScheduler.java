@@ -32,6 +32,7 @@ import java.time.LocalDateTime;
  * - 현재 @Scheduled만 사용 → 서버 N대에서 동시에 실행됨 (중복 DELETE, 데이터 오염은 없으나 불필요한 DB 부하)
  * - 운영 환경 다중 서버 적용 시 ShedLock으로 1대만 실행되도록 제어 필요
  *   (@SchedulerLock 어노테이션 + DB/Redis 락 테이블로 단일 실행 보장)
+ * - 보조 인프라이기에 트레이드오프를 고려한 설계.
  *
  * 추후 리팩터:
  * - 삭제 건수가 많을 경우 LIMIT를 걸어 분할 삭제 (DB 부하 분산)
@@ -59,13 +60,16 @@ public class IdempotencyCleanupScheduler {
     public void deleteExpiredIdempotencyRecords() {
         LocalDateTime now = LocalDateTime.now();
         log.info("[멱등성 정리] 만료 레코드 삭제 시작 - 기준시각={}", now);
+        log.info("[idempotency-cleanup] delete expired records start - now={}", now);
 
         int deletedCount = idempotencyRepository.deleteExpiredRecords(now);
 
         if (deletedCount > 0) {
             log.info("[멱등성 정리] 완료 - 삭제 건수={}", deletedCount);
+            log.info("[idempotency-cleanup] done - deletedCount={}", deletedCount);
         } else {
             log.debug("[멱등성 정리] 만료 레코드 없음");
+            log.debug("[idempotency-cleanup] no expired records");
         }
     }
 }

@@ -31,6 +31,8 @@ public class GlobalExceptionHandler {
         ErrorCode errorCode = ex.getErrorCode();
         log.error("[비즈니스 예외] code={}, message={}, path={}",
                 errorCode.getCode(), ex.getMessage(), request.getRequestURI());
+        log.error("[business-error] code={}, message={}, path={}",
+                errorCode.getCode(), ex.getMessage(), request.getRequestURI());
 
         return ResponseEntity
                 .status(errorCode.getHttpStatus())
@@ -50,6 +52,8 @@ public class GlobalExceptionHandler {
 
         log.warn("[유효성 검증 실패] 오류 {}건, path={}, fields={}",
                 fieldErrors.size(), request.getRequestURI(), fieldErrors);
+        log.warn("[validation-failed] count={}, path={}, fields={}",
+                fieldErrors.size(), request.getRequestURI(), fieldErrors);
 
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
@@ -62,6 +66,8 @@ public class GlobalExceptionHandler {
             Exception ex, HttpServletRequest request) {
 
         log.error("[예상치 못한 예외] path={}, exceptionClass={}, message={}",
+                request.getRequestURI(), ex.getClass().getName(), ex.getMessage());
+        log.error("[unexpected-error] path={}, exceptionClass={}, message={}",
                 request.getRequestURI(), ex.getClass().getName(), ex.getMessage(), ex);
 
         return ResponseEntity

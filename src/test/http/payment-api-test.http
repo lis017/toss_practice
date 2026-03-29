@@ -1,0 +1,90 @@
+### ============================================================
+### 결제 API 통합 테스트 (IntelliJ HTTP Client)
+### 사용법: 각 요청 왼쪽의 ▶ 버튼 클릭
+### 사전 조건: docker compose up --build 실행 후 앱 정상 기동 확인
+### ============================================================
+
+### [1] 헬스체크 - 앱 정상 기동 확인용 (가장 먼저 실행)
+GET http://localhost:8080/api/v1/health
+
+###
+
+### [2] 정상 결제 요청 - 캐시백 10% 적립 확인
+# fromAccountId=1 (김철수, 잔액 10,000,000원) → toAccountId=2 (토스상점)
+# 기대 응답: status=SUCCESS, cashbackAmount=1000
+POST http://localhost:8080/api/v1/payments
+Content-Type: application/json
+
+{
+  "idempotencyKey": "test-001",
+  "fromAccountId": 1,
+  "toAccountId": 2,
+  "amount": 10000
+}
+
+###
+
+### [3] 멱등성 검증 - 동일 idempotencyKey로 재요청
+# 기대 응답: [2]번과 완전히 동일한 응답 (중복 처리 아님)
+POST http://localhost:8080/api/v1/payments
+Content-Type: application/json
+
+{
+  "idempotencyKey": "test-001",
+  "fromAccountId": 1,
+  "toAccountId": 2,
+  "amount": 10000
+}
+
+###
+
+### [4] 다른 키로 새 결제 - 두 번째 독립 거래
+POST http://localhost:8080/api/v1/payments
+Content-Type: application/json
+
+{
+  "idempotencyKey": "test-002",
+  "fromAccountId": 1,
+  "toAccountId": 2,
+  "amount": 50000
+}
+
+###
+
+### [5] 잔액 부족 오류 - amount가 잔액(10,000,000)보다 큰 경우
+# 기대 응답: 400 또는 422 오류
+POST http://localhost:8080/api/v1/payments
+Content-Type: application/json
+
+{
+  "idempotencyKey": "test-err-001",
+  "fromAccountId": 1,
+  "toAccountId": 2,
+  "amount": 99999999
+}
+
+###
+
+### [6] 입력값 검증 오류 - amount 음수
+# 기대 응답: 400 Bad Request (@Valid 검증 실패)
+POST http://localhost:8080/api/v1/payments
+Content-Type: application/json
+
+{
+  "idempotencyKey": "test-err-002",
+  "fromAccountId": 1,
+  "toAccountId": 2,
+  "amount": -1000
+}
+
+###
+
+### [7] 입력값 검증 오류 - 필수 필드 누락
+# 기대 응답: 400 Bad Request
+POST http://localhost:8080/api/v1/payments
+Content-Type: application/json
+
+{
+  "idempotencyKey": "test-err-003",
+  "fromAccountId": 1
+}

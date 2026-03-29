@@ -34,6 +34,8 @@ public class PaymentFacade {
     public PaymentResponse processPayment(PaymentRequest request) {
         log.info("[결제 시작] from={}, to={}, amount={}, key={}",
                 request.getFromAccountId(), request.getToAccountId(), request.getAmount(), request.getIdempotencyKey());
+        log.info("[payment] start from={}, to={}, amount={}, idempotencyKey={}",
+                request.getFromAccountId(), request.getToAccountId(), request.getAmount(), request.getIdempotencyKey());
 
         // 동일 키로 재요청 시 저장된 첫 번째 응답 그대로 반환 (24시간 TTL, 만료 후엔 새 결제로 처리)
         PaymentIdempotency existingRecord = idempotencyRepository
@@ -42,6 +44,7 @@ public class PaymentFacade {
 
         if (existingRecord != null) {
             log.info("[멱등성] 중복 요청 - key={}, txId={}", request.getIdempotencyKey(), existingRecord.getTransactionId());
+            log.info("[idempotency] duplicate request - key={}, txId={}", request.getIdempotencyKey(), existingRecord.getTransactionId());
             return PaymentResponse.success(
                     existingRecord.getTransactionId(),
                     existingRecord.getAmount(),
@@ -56,24 +59,30 @@ public class PaymentFacade {
                     request.getFromAccountId(), request.getToAccountId(), request.getAmount());
         } catch (CustomException e) {
             log.error("[STEP 1 실패] 이체 실패 - {}", e.getMessage());
+            log.error("[STEP1] transfer failed - {}", e.getMessage());
             throw e;
         }
         log.info("[STEP 1 완료] 이체 성공 - txId={}", transactionId);
+        log.info("[STEP1] transfer ok - txId={}", transactionId);
 
         // STEP 2: 외부 은행 승인 (커넥션 미점유 상태에서 호출)
         try {
             externalBankService.approve(request.getFromAccountId(), request.getAmount());
             log.info("[STEP 2 완료] 외부 은행 승인 - txId={}", transactionId);
+            log.info("[STEP2] external bank approved - txId={}", transactionId);
 
         } catch (CustomException e) {
             // 외부 은행 실패 → TX1 역방향 원복 (보상 트랜잭션)
             log.error("[STEP 2 실패] 보상 트랜잭션 실행 - txId={}, error={}", transactionId, e.getMessage());
+            log.error("[STEP2] failed, running compensation - txId={}, error={}", transactionId, e.getMessage());
             try {
                 paymentService.compensate(transactionId);
                 log.warn("[TX2] 보상 트랜잭션 완료 - txId={}", transactionId);
+                log.warn("[TX2] compensation ok - txId={}", transactionId);
             } catch (Exception compensationEx) {
                 // 보상 트랜잭션 실패 = 데이터 불일치. 운영 알림 필요
                 log.error("[심각] 보상 트랜잭션 실패 - txId={}, 수동 개입 필요", transactionId, compensationEx);
+                log.error("[CRITICAL] compensation failed - txId={}, manual intervention required", transactionId, compensationEx);
             }
             throw e;
         }
@@ -87,6 +96,7 @@ public class PaymentFacade {
                 e.getErrorCode() == ErrorCode.CASHBACK_BUDGET_EXCEEDED) {
                 // 캐시백 미지급이어도 결제 자체는 성공 처리
                 log.warn("[캐시백 미지급] txId={}, reason={}", transactionId, e.getMessage());
+                log.warn("[cashback] not granted - txId={}, reason={}", transactionId, e.getMessage());
             } else {
                 throw e;
             }
@@ -95,6 +105,7 @@ public class PaymentFacade {
         // STEP 4: 트랜잭션 SUCCESS 상태 업데이트
         paymentService.markTransactionSuccess(transactionId, cashbackAmount);
         log.info("[결제 완료] txId={}, amount={}, cashback={}", transactionId, request.getAmount(), cashbackAmount);
+        log.info("[payment] done txId={}, amount={}, cashback={}", transactionId, request.getAmount(), cashbackAmount);
 
         // 멱등성 레코드 저장 (결제 성공 후 저장 → 실패 시 재처리 가능)
         idempotencyRepository.save(PaymentIdempotency.builder()
