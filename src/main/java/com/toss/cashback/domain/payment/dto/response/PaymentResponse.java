@@ -4,6 +4,7 @@ import com.toss.cashback.domain.payment.entity.PaymentStatus;
 import lombok.Builder;
 import lombok.Getter;
 
+// ======= [11번] 결제 응답 DTO =======
 /**
  * 결제 응답 DTO
  */

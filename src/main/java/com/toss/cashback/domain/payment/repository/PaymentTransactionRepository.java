@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 
+// ======= [2번] 결제 트랜잭션 레포지토리 =======
 /**
  * 결제 트랜잭션 이력 리포지토리
  *

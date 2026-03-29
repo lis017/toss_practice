@@ -8,6 +8,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+// ======= [2번] 계좌 엔티티 =======
 /**
  * =====================================================================
  * [설계 의도] 계좌 도메인 엔티티 - 도메인 모델 패턴 적용

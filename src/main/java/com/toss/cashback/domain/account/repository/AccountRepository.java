@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
 
+// ======= [2번] 계좌 레포지토리 =======
 /**
  * =====================================================================
  * [설계 의도] 계좌 리포지토리

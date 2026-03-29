@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 
+// ======= [3번] 에러 코드 정의 =======
 /**
  * 에러 코드 목록. A(계좌), C(캐시백), E(외부API), V(유효성), CB(서킷브레이커), S(시스템) 접두사로 구분합니다.
  */

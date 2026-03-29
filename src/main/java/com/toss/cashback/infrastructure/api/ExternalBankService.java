@@ -1,5 +1,6 @@
 package com.toss.cashback.infrastructure.api;
 
+// ======= [7번] 외부 은행 API 인터페이스 =======
 /**
  * =====================================================================
  * [설계 의도] 외부 은행 API 인터페이스 - infrastructure/api 레이어 배치

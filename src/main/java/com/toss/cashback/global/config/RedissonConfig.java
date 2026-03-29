@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+// ======= [6번] Redisson 클라이언트 설정 =======
 /**
  * Redisson 클라이언트 설정. 현재는 단일 노드이며, 운영 환경에서는 Sentinel 또는 Cluster로 전환해야 합니다.
  */

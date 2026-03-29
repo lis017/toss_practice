@@ -7,6 +7,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+// ======= [2번] 캐시백 예산 엔티티 =======
 /**
  * =====================================================================
  * [설계 의도] 캐시백 이벤트 예산 엔티티 (DB 싱글턴 레코드)

@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
+// ======= [8번] 캐시백 지급 서비스 (동시성 핵심) =======
 /**
  * 캐시백 지급 처리. 동시성이 핵심입니다.
  *

@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -26,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+// ======= [9번] 캐시백 동시성 통합 테스트 =======
 /**
  * =====================================================================
  * 캐시백 동시성 통합 테스트
@@ -60,6 +62,9 @@ class CashbackConcurrencyTest {
 
     @Autowired
     private AccountRepository accountRepository;
+
+    @MockBean
+    private RedissonClient redissonClient;                      // RedissonConfig의 실제 Redis 연결 차단
 
     @MockBean
     private RedissonLockService redissonLockService;            // 실제 Redis 대신 로컬 락으로 대체

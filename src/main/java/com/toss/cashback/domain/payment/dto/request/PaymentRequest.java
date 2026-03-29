@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Positive;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+// ======= [11번] 결제 요청 DTO =======
 /**
  * 결제 요청 DTO
  *

@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 
 import java.util.Optional;
 
+// ======= [2번] 캐시백 예산 레포지토리 =======
 /**
  * =====================================================================
  * [설계 의도] 캐시백 예산 리포지토리

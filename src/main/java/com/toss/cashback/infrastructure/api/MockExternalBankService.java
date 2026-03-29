@@ -13,6 +13,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+// ======= [7번] 외부 은행 API Mock + 서킷 브레이커 =======
 /**
  * 외부 은행 API Mock 구현체.
  *

@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.util.List;
 import java.util.stream.Collectors;
 
+// ======= [3번] 전역 예외 처리기 =======
 /**
  * 전역 예외 처리기. 모든 API 에러 응답 형식을 ErrorResponse로 통일합니다.
  *

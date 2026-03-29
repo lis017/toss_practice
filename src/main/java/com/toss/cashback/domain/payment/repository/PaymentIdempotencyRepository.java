@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
+// ======= [2번] 멱등성 레코드 레포지토리 =======
 /**
  * =====================================================================
  * [설계 의도] 멱등성 레코드 리포지토리

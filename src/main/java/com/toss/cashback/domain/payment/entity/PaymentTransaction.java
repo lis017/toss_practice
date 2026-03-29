@@ -10,6 +10,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
+// ======= [2번] 결제 트랜잭션 엔티티 =======
 /**
  * =====================================================================
  * [설계 의도] 결제 트랜잭션 이력 엔티티

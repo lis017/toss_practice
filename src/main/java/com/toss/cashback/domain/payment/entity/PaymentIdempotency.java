@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-// [변경] 멱등성 레코드 보관 기간 (현재 24시간, 필요 시 조정)
+// ======= [2번] 멱등성 레코드 엔티티 =======
 // 24시간 이후 동일 idempotencyKey로 재요청하면 새 결제로 처리됨에 주의
 
 /**

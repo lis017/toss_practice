@@ -12,6 +12,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+// ======= [11번] 초기 데이터 세팅 (테스트 계좌 + 캐시백 예산) =======
 /**
  * 서버 시작 시 초기 데이터 세팅. 운영 환경이면 Flyway로 대체해야 합니다.
  */

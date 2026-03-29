@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+// ======= [11번] 결제 API 컨트롤러 =======
 /**
  * =====================================================================
  * [설계 의도] 결제 API 컨트롤러 - 얇은 컨트롤러(Thin Controller) 원칙

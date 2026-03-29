@@ -6,6 +6,7 @@ import com.toss.cashback.domain.payment.entity.PaymentTransaction;
 import com.toss.cashback.domain.payment.repository.PaymentTransactionRepository;
 import com.toss.cashback.global.error.CustomException;
 import com.toss.cashback.global.error.ErrorCode;
+import com.toss.cashback.infrastructure.redis.RedissonLockService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,14 +14,18 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.Callable;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+// ======= [5번] 계좌 이체 서비스 단위 테스트 =======
 /**
  * =====================================================================
  * PaymentService 단위 테스트 (Mockito)
@@ -28,7 +33,8 @@ import static org.mockito.Mockito.*;
  *
  * 테스트 전략:
  * - Spring Context 없이 순수 단위 테스트 (빠른 실행)
- * - Repository를 Mock으로 대체 → 실제 DB 의존성 제거
+ * - Repository, RedissonLockService, TransactionTemplate을 Mock으로 대체
+ * - 분산 락과 트랜잭션은 pass-through mock → 비즈니스 로직만 집중 검증
  *
  * 커버리지:
  * - 정상 이체 / 역순 ID 이체
@@ -46,6 +52,12 @@ class PaymentServiceTest {
     @Mock
     private PaymentTransactionRepository transactionRepository;
 
+    @Mock
+    private RedissonLockService redissonLockService;    // 실제 Redis 불필요 - pass-through
+
+    @Mock
+    private TransactionTemplate transactionTemplate;    // 실제 트랜잭션 불필요 - pass-through
+
     @InjectMocks
     private PaymentService paymentService;
 
@@ -53,7 +65,7 @@ class PaymentServiceTest {
     private Account receiverAccount;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         senderAccount = Account.builder()
                 .accountNumber("110-1234-5678")
                 .ownerName("김철수")
@@ -65,6 +77,20 @@ class PaymentServiceTest {
                 .ownerName("토스상점")
                 .balance(0L)
                 .build();
+
+        // 분산 락 mock: 락 없이 task 바로 실행 (비즈니스 로직만 검증)
+        // lenient: sameAccount 테스트처럼 락까지 도달하지 않는 케이스에서 미사용 경고 방지
+        lenient().when(redissonLockService.executeWithMultiLock(anyList(), anyLong(), anyLong(), any()))
+                .thenAnswer(inv -> ((Callable<?>) inv.getArgument(3)).call());
+
+        // TransactionTemplate mock: 트랜잭션 없이 콜백 바로 실행
+        lenient().when(transactionTemplate.execute(any()))
+                .thenAnswer(inv -> {
+                    org.springframework.transaction.support.TransactionCallback<?> callback =
+                            inv.getArgument(0);
+                    return callback.doInTransaction(
+                            mock(org.springframework.transaction.TransactionStatus.class));
+                });
     }
 
     // ================================================================
@@ -92,9 +118,9 @@ class PaymentServiceTest {
     }
 
     @Test
-    @DisplayName("역순 ID 이체 - fromId > toId 케이스도 정상 이체")
+    @DisplayName("역순 ID 이체 - fromId > toId 케이스도 정상 이체 (MultiLock 정렬 처리)")
     void executeTransfer_success_reverseIdOrder() {
-        // given: fromId=2(큰), toId=1(작음)
+        // given: fromId=2(큰), toId=1(작음) → 락은 항상 낮은 ID부터 획득
         when(accountRepository.findById(2L)).thenReturn(Optional.of(senderAccount));
         when(accountRepository.findById(1L)).thenReturn(Optional.of(receiverAccount));
 
@@ -131,15 +157,16 @@ class PaymentServiceTest {
     }
 
     @Test
-    @DisplayName("동일 계좌 이체 - SAME_ACCOUNT_TRANSFER 예외 + DB 조회 없음")
+    @DisplayName("동일 계좌 이체 - SAME_ACCOUNT_TRANSFER 예외 + 락/DB 조회 없음")
     void executeTransfer_fail_sameAccount() {
         assertThatThrownBy(() -> paymentService.executeTransfer(1L, 1L, 10_000L))
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.SAME_ACCOUNT_TRANSFER);
 
-        // 동일 계좌 체크에서 바로 예외 → DB 조회 없음
+        // 동일 계좌 체크에서 바로 예외 → 락 획득/DB 조회 없음
         verify(accountRepository, never()).findById(anyLong());
+        verify(redissonLockService, never()).executeWithMultiLock(anyList(), anyLong(), anyLong(), any());
     }
 
     @Test

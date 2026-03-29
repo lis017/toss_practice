@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
+// ======= [10번] 멱등성 레코드 정리 스케줄러 =======
 /**
  * =====================================================================
  * [설계 의도] 멱등성 레코드 만료 정리 스케줄러
@@ -26,6 +27,11 @@ import java.time.LocalDateTime;
  * "0 0 3 * * *" → 매일 03:00:00에 실행
  *
  * [주의] @EnableScheduling이 CashbackSystemApplication에 있어야 동작합니다
+ *
+ * 다중 서버 주의:
+ * - 현재 @Scheduled만 사용 → 서버 N대에서 동시에 실행됨 (중복 DELETE, 데이터 오염은 없으나 불필요한 DB 부하)
+ * - 운영 환경 다중 서버 적용 시 ShedLock으로 1대만 실행되도록 제어 필요
+ *   (@SchedulerLock 어노테이션 + DB/Redis 락 테이블로 단일 실행 보장)
  *
  * 추후 리팩터:
  * - 삭제 건수가 많을 경우 LIMIT를 걸어 분할 삭제 (DB 부하 분산)

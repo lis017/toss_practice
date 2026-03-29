@@ -7,6 +7,7 @@ import lombok.Getter;
 import java.time.LocalDateTime;
 import java.util.List;
 
+// ======= [3번] API 에러 응답 포맷 =======
 /**
  * =====================================================================
  * [설계 의도] API 에러 응답 공통 포맷

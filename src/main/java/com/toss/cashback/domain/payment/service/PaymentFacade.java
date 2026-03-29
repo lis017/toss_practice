@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+// ======= [10번] 결제 Facade (트랜잭션 분리 + 멱등성) =======
 /**
  * 결제 전체 흐름 조율. @Transactional 없이 각 단계별 트랜잭션을 분리하는 게 핵심입니다.
  *
