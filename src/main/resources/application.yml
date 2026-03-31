@@ -59,9 +59,11 @@ cashback:
   budget:
     total: 100000000    # [변경] 이벤트 총 예산 (현재 1억 원 = 100,000,000)
   external-bank:
-    simulate-delay: false   # [테스트용] true로 변경 시 외부 은행 API 5초 지연 → 타임아웃 보상 트랜잭션 발동
-    simulate-error: false   # [테스트용] true로 변경 시 외부 은행 API 에러 → 보상 트랜잭션 발동
+    simulate-delay: false   # [테스트용] true로 변경 시 외부 은행 API 5초 지연 → 타임아웃 발동
+    simulate-error: false   # [테스트용] true로 변경 시 외부 은행 API 에러 발동
     timeout-seconds: 3      # [변경] 외부 은행 API 타임아웃 기준 시간 (초)
+  virtual-account:
+    account-number: TOSS-VIRTUAL-001  # PG 자금 보관용 가상계좌 번호 (DataInitializer에서 생성)
 
 # ======================== Circuit Breaker (Resilience4j) ========================
 # 외부 은행 API 서킷 브레이커 설정

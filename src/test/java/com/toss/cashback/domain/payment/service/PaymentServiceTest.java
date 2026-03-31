@@ -36,10 +36,15 @@ import static org.mockito.Mockito.*;
  * - Repository, RedissonLockService, TransactionTemplate을 Mock으로 대체
  * - 분산 락과 트랜잭션은 pass-through mock → 비즈니스 로직만 집중 검증
  *
+ * C안 기준 executeTransfer 파라미터:
+ * - fromAccountId   = 구매자 계좌 ID (A - 실제 출금 대상)
+ * - merchantAccountId = 가맹점 계좌 ID (B - 기록용, 정산 수신처)
+ * - virtualAccountId = 가상계좌 ID (C - 실제 입금 대상)
+ * - amount
+ *
  * 커버리지:
- * - 정상 이체 / 역순 ID 이체
+ * - 정상 이체 / 역순 ID 이체 (MultiLock 락 정렬 검증)
  * - 잔액 부족 / 동일 계좌 / 미존재 계좌 / 0원 / 음수 금액 예외
- * - 보상 트랜잭션 정상 동작 (계좌 원복 확인)
  * =====================================================================
  */
 @ExtendWith(MockitoExtension.class)
@@ -61,20 +66,27 @@ class PaymentServiceTest {
     @InjectMocks
     private PaymentService paymentService;
 
-    private Account senderAccount;
-    private Account receiverAccount;
+    private Account buyerAccount;       // 구매자 계좌 (A, ID=1)
+    private Account merchantAccount;    // 가맹점 계좌 (B, ID=2)
+    private Account virtualAccount;     // 가상계좌 (C, ID=3)
 
     @BeforeEach
     void setUp() throws Exception {
-        senderAccount = Account.builder()
+        buyerAccount = Account.builder()
                 .accountNumber("110-1234-5678")
                 .ownerName("김철수")
                 .balance(1_000_000L)            // 잔액 100만원
                 .build();
 
-        receiverAccount = Account.builder()
+        merchantAccount = Account.builder()
                 .accountNumber("220-9876-5432")
                 .ownerName("토스상점")
+                .balance(0L)
+                .build();
+
+        virtualAccount = Account.builder()
+                .accountNumber("TOSS-VIRTUAL-001")
+                .ownerName("토스 가상계좌")
                 .balance(0L)
                 .build();
 
@@ -98,42 +110,42 @@ class PaymentServiceTest {
     // ================================================================
 
     @Test
-    @DisplayName("정상 이체 - 잔액 충분한 경우 이체 성공 및 잔액 변경 확인")
+    @DisplayName("정상 이체 - 구매자(A) 잔액 차감 + 가상계좌(C) 잔액 증가 확인")
     void executeTransfer_success_whenBalanceSufficient() {
-        // given
-        when(accountRepository.findById(1L)).thenReturn(Optional.of(senderAccount));
-        when(accountRepository.findById(2L)).thenReturn(Optional.of(receiverAccount));
+        // given: from=1L(구매자), merchant=2L(가맹점-기록용), virtual=3L(실제 입금)
+        when(accountRepository.findById(1L)).thenReturn(Optional.of(buyerAccount));
+        when(accountRepository.findById(3L)).thenReturn(Optional.of(virtualAccount));
 
         PaymentTransaction mockTx = mock(PaymentTransaction.class);
         when(mockTx.getId()).thenReturn(1L);
         when(transactionRepository.save(any())).thenReturn(mockTx);
 
         // when
-        Long txId = paymentService.executeTransfer(1L, 2L, 100_000L);
+        Long txId = paymentService.executeTransfer(1L, 2L, 3L, 100_000L);
 
-        // then
+        // then: 구매자 차감, 가상계좌 입금
         assertThat(txId).isEqualTo(1L);
-        assertThat(senderAccount.getBalance()).isEqualTo(900_000L);     // 100만 - 10만 = 90만
-        assertThat(receiverAccount.getBalance()).isEqualTo(100_000L);   // 0 + 10만 = 10만
+        assertThat(buyerAccount.getBalance()).isEqualTo(900_000L);    // 100만 - 10만 = 90만
+        assertThat(virtualAccount.getBalance()).isEqualTo(100_000L);  // 0 + 10만 = 10만 (가상계좌 보관)
     }
 
     @Test
-    @DisplayName("역순 ID 이체 - fromId > toId 케이스도 정상 이체 (MultiLock 정렬 처리)")
+    @DisplayName("역순 ID 이체 - from > virtual ID 케이스도 정상 이체 (MultiLock 정렬 처리)")
     void executeTransfer_success_reverseIdOrder() {
-        // given: fromId=2(큰), toId=1(작음) → 락은 항상 낮은 ID부터 획득
-        when(accountRepository.findById(2L)).thenReturn(Optional.of(senderAccount));
-        when(accountRepository.findById(1L)).thenReturn(Optional.of(receiverAccount));
+        // given: fromId=3(큰), virtualId=1(작음) → 락은 항상 낮은 ID부터 획득
+        when(accountRepository.findById(3L)).thenReturn(Optional.of(buyerAccount));
+        when(accountRepository.findById(1L)).thenReturn(Optional.of(virtualAccount));
 
         PaymentTransaction mockTx = mock(PaymentTransaction.class);
         when(mockTx.getId()).thenReturn(1L);
         when(transactionRepository.save(any())).thenReturn(mockTx);
 
-        // when
-        Long txId = paymentService.executeTransfer(2L, 1L, 100_000L);
+        // when: from=3L(구매자), merchant=2L(가맹점-기록용), virtual=1L
+        Long txId = paymentService.executeTransfer(3L, 2L, 1L, 100_000L);
 
         // then
         assertThat(txId).isNotNull();
-        assertThat(senderAccount.getBalance()).isEqualTo(900_000L);
+        assertThat(buyerAccount.getBalance()).isEqualTo(900_000L);
     }
 
     // ================================================================
@@ -144,22 +156,23 @@ class PaymentServiceTest {
     @DisplayName("잔액 부족 - INSUFFICIENT_BALANCE 예외 + 잔액 변경 없음")
     void executeTransfer_fail_insufficientBalance() {
         // given: 잔액 100만인데 200만 이체 시도
-        when(accountRepository.findById(1L)).thenReturn(Optional.of(senderAccount));
-        when(accountRepository.findById(2L)).thenReturn(Optional.of(receiverAccount));
+        when(accountRepository.findById(1L)).thenReturn(Optional.of(buyerAccount));
+        lenient().when(accountRepository.findById(3L)).thenReturn(Optional.of(virtualAccount));
 
         // when & then
-        assertThatThrownBy(() -> paymentService.executeTransfer(1L, 2L, 2_000_000L))
+        assertThatThrownBy(() -> paymentService.executeTransfer(1L, 2L, 3L, 2_000_000L))
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INSUFFICIENT_BALANCE);
 
-        assertThat(senderAccount.getBalance()).isEqualTo(1_000_000L);   // 잔액 변경 없음
+        assertThat(buyerAccount.getBalance()).isEqualTo(1_000_000L);   // 잔액 변경 없음
     }
 
     @Test
     @DisplayName("동일 계좌 이체 - SAME_ACCOUNT_TRANSFER 예외 + 락/DB 조회 없음")
     void executeTransfer_fail_sameAccount() {
-        assertThatThrownBy(() -> paymentService.executeTransfer(1L, 1L, 10_000L))
+        // from=1L, merchant=1L 동일 → 자기 자신에게 결제 불가
+        assertThatThrownBy(() -> paymentService.executeTransfer(1L, 1L, 3L, 10_000L))
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.SAME_ACCOUNT_TRANSFER);
@@ -174,7 +187,7 @@ class PaymentServiceTest {
     void executeTransfer_fail_accountNotFound() {
         when(accountRepository.findById(anyLong())).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> paymentService.executeTransfer(1L, 2L, 10_000L))
+        assertThatThrownBy(() -> paymentService.executeTransfer(1L, 2L, 3L, 10_000L))
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ACCOUNT_NOT_FOUND);
@@ -183,10 +196,10 @@ class PaymentServiceTest {
     @Test
     @DisplayName("0원 이체 - INVALID_AMOUNT 예외")
     void executeTransfer_fail_zeroAmount() {
-        when(accountRepository.findById(1L)).thenReturn(Optional.of(senderAccount));
-        when(accountRepository.findById(2L)).thenReturn(Optional.of(receiverAccount));
+        when(accountRepository.findById(1L)).thenReturn(Optional.of(buyerAccount));
+        lenient().when(accountRepository.findById(3L)).thenReturn(Optional.of(virtualAccount));
 
-        assertThatThrownBy(() -> paymentService.executeTransfer(1L, 2L, 0L))
+        assertThatThrownBy(() -> paymentService.executeTransfer(1L, 2L, 3L, 0L))
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_AMOUNT);
@@ -195,42 +208,12 @@ class PaymentServiceTest {
     @Test
     @DisplayName("음수 금액 이체 - INVALID_AMOUNT 예외")
     void executeTransfer_fail_negativeAmount() {
-        when(accountRepository.findById(1L)).thenReturn(Optional.of(senderAccount));
-        when(accountRepository.findById(2L)).thenReturn(Optional.of(receiverAccount));
+        when(accountRepository.findById(1L)).thenReturn(Optional.of(buyerAccount));
+        lenient().when(accountRepository.findById(3L)).thenReturn(Optional.of(virtualAccount));
 
-        assertThatThrownBy(() -> paymentService.executeTransfer(1L, 2L, -10_000L))
+        assertThatThrownBy(() -> paymentService.executeTransfer(1L, 2L, 3L, -10_000L))
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_AMOUNT);
-    }
-
-    // ================================================================
-    // 보상 트랜잭션 테스트
-    // ================================================================
-
-    @Test
-    @DisplayName("보상 트랜잭션 - 이체 후 외부 API 실패 시 계좌 잔액 원복 확인")
-    void compensate_success_restoresBalances() {
-        // given: 이체 완료된 상태 (sender: 90만, receiver: 10만)
-        Account compensateSender = Account.builder()
-                .accountNumber("110-1111-1111").ownerName("김철수").balance(900_000L).build();
-        Account compensateReceiver = Account.builder()
-                .accountNumber("220-2222-2222").ownerName("상점").balance(100_000L).build();
-
-        PaymentTransaction mockTx = mock(PaymentTransaction.class);
-        when(mockTx.getFromAccountId()).thenReturn(1L);
-        when(mockTx.getToAccountId()).thenReturn(2L);
-        when(mockTx.getAmount()).thenReturn(100_000L);
-        when(transactionRepository.findById(1L)).thenReturn(Optional.of(mockTx));
-        when(accountRepository.findById(1L)).thenReturn(Optional.of(compensateSender));
-        when(accountRepository.findById(2L)).thenReturn(Optional.of(compensateReceiver));
-
-        // when
-        paymentService.compensate(1L);
-
-        // then: 잔액 원복 확인
-        assertThat(compensateSender.getBalance()).isEqualTo(1_000_000L);    // 90만 + 10만 = 100만
-        assertThat(compensateReceiver.getBalance()).isEqualTo(0L);           // 10만 - 10만 = 0원
-        verify(mockTx).markCompensated(anyString());                        // COMPENSATED 상태 변경 확인
     }
 }
