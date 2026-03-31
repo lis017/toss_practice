@@ -39,8 +39,7 @@ public enum ErrorCode {
     CIRCUIT_BREAKER_OPEN(HttpStatus.SERVICE_UNAVAILABLE, "CB001", "외부 은행 서비스가 일시적으로 차단되었습니다. 잠시 후 다시 시도해주세요"),
 
     // ======================== S: 시스템 에러 ========================
-    INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "S001", "서버 내부 오류가 발생했습니다"),
-    COMPENSATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "S002", "보상 트랜잭션 처리 중 오류가 발생했습니다");
+    INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "S001", "서버 내부 오류가 발생했습니다");
 
     private final HttpStatus httpStatus;    // HTTP 응답 상태 코드
     private final String code;              // 내부 에러 코드 (클라이언트 분기 처리용)

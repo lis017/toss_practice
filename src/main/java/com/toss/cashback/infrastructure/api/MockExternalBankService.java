@@ -17,7 +17,7 @@ import java.util.concurrent.TimeoutException;
 /**
  * 외부 은행 API Mock 구현체.
  *
- * 서킷 브레이커를 붙인 이유: 외부 서버 다운 시 매 요청마다 타임아웃 대기 + 보상 트랜잭션이 반복 실행되면
+ * 서킷 브레이커를 붙인 이유: 외부 서버 다운 시 매 요청마다 타임아웃 대기가 반복되면
  * 스레드가 고갈됩니다. 실패율 60% 초과 시 서킷을 열어서 이후 요청은 즉시 차단합니다.
  *
  * application.yml에서 simulate-delay: true / simulate-error: true로 장애 상황을 재현할 수 있습니다.
@@ -88,7 +88,7 @@ public class MockExternalBankService implements ExternalBankService {
             log.warn("[서킷 브레이커] OPEN 상태 - 즉시 차단, accountId={}", accountId);
             throw new CustomException(ErrorCode.CIRCUIT_BREAKER_OPEN);
         }
-        // 서킷 오픈 외 예외: 원본 예외 그대로 전파 (보상 트랜잭션이 정상 동작해야 함)
+        // 서킷 오픈 외 예외: 원본 예외 그대로 전파 (Facade에서 적절히 처리)
         log.error("[서킷 브레이커] Fallback - accountId={}, cause={}", accountId, throwable.getMessage());
         if (throwable instanceof CustomException) {
             throw (CustomException) throwable;
