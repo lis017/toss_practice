@@ -38,10 +38,8 @@ public class DataInitializer implements ApplicationRunner {
         if (cashbackBudgetRepository.count() == 0) {
             cashbackBudgetRepository.save(new CashbackBudget(totalBudget));
             log.info("[초기화] 캐시백 예산 생성 - 총 예산: {}원", totalBudget);
-            log.info("[init] cashback budget created - totalBudget={} KRW", totalBudget);
         } else {
             log.info("[초기화] 캐시백 예산 이미 존재 - 스킵");
-            log.info("[init] cashback budget already exists - skip");
         }
     }
 
@@ -61,14 +59,10 @@ public class DataInitializer implements ApplicationRunner {
                     .build());
 
             log.info("[초기화] 테스트 계좌 생성 완료");
-            log.info("[init] test accounts created");
             log.info("[테스트] POST http://localhost:8080/api/v1/payments");
-            log.info("[hint] POST http://localhost:8080/api/v1/payments");
             log.info("[테스트] Body: {{ \"idempotencyKey\": \"...\", \"fromAccountId\": 1, \"toAccountId\": 2, \"amount\": 10000 }}");
-            log.info("[hint] Body: idempotencyKey, fromAccountId, toAccountId, amount (JSON)");
         } else {
             log.info("[초기화] 테스트 계좌 이미 존재 - 스킵");
-            log.info("[init] test accounts already exist - skip");
         }
     }
 }

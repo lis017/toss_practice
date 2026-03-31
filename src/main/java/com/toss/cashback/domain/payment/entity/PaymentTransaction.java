@@ -95,4 +95,10 @@ public class PaymentTransaction {
         this.status = PaymentStatus.COMPENSATED;
         this.failureReason = reason;
     }
+
+    public void markCompensationFailed(String reason) {
+        // 보상 트랜잭션 자체 실패 → 계좌 불일치 상태. 운영팀 수동 개입 필요
+        this.status = PaymentStatus.COMPENSATION_FAILED;
+        this.failureReason = reason;
+    }
 }

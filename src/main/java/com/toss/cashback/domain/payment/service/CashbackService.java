@@ -54,7 +54,6 @@ public class CashbackService {
 
         if (!budget.canGrant(cashbackAmount)) {
             log.info("[캐시백] 예산 소진 - accountId={}, 잔여예산={}", fromAccountId, budget.getRemainingBudget());
-            log.info("[cashback] budget exhausted - accountId={}, remaining={}", fromAccountId, budget.getRemainingBudget());
             return 0L;
         }
 
@@ -65,8 +64,6 @@ public class CashbackService {
         budget.use(cashbackAmount);
 
         log.info("[캐시백] 적립 완료 - accountId={}, cashback={}, 잔여예산={}",
-                fromAccountId, cashbackAmount, budget.getRemainingBudget());
-        log.info("[cashback] granted - accountId={}, cashback={}, remaining={}",
                 fromAccountId, cashbackAmount, budget.getRemainingBudget());
         return cashbackAmount;
     }

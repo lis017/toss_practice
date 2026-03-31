@@ -60,16 +60,13 @@ public class IdempotencyCleanupScheduler {
     public void deleteExpiredIdempotencyRecords() {
         LocalDateTime now = LocalDateTime.now();
         log.info("[멱등성 정리] 만료 레코드 삭제 시작 - 기준시각={}", now);
-        log.info("[idempotency-cleanup] delete expired records start - now={}", now);
 
         int deletedCount = idempotencyRepository.deleteExpiredRecords(now);
 
         if (deletedCount > 0) {
             log.info("[멱등성 정리] 완료 - 삭제 건수={}", deletedCount);
-            log.info("[idempotency-cleanup] done - deletedCount={}", deletedCount);
         } else {
             log.debug("[멱등성 정리] 만료 레코드 없음");
-            log.debug("[idempotency-cleanup] no expired records");
         }
     }
 }

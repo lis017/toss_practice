@@ -2,7 +2,6 @@ package com.toss.cashback.domain.payment.entity;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -20,10 +19,11 @@ import java.time.LocalDateTime;
  * - 클라이언트가 네트워크 오류로 결제 요청을 재시도하면 중복 결제 발생
  * - 예: 모바일 앱이 응답 수신 실패 → 같은 요청 재전송 → 계좌에서 두 번 출금
  *
- * 해결 - 멱등성 키:
- * - 클라이언트가 요청 시 고유한 idempotencyKey(UUID) 포함
- * - 서버는 최초 처리 결과를 이 테이블에 저장
- * - 동일 idempotencyKey 재요청 시 저장된 결과를 즉시 반환 (실제 처리 스킵)
+ * 해결 - 멱등성 키 선등록:
+ * - 결제 처리 시작 전 PROCESSING 상태로 먼저 저장 (unique constraint)
+ * - 동시 중복 요청이 들어와도 DB 제약으로 하나만 통과
+ * - 처리 완료 후 COMPLETED로 업데이트 → 이후 재요청은 캐시된 결과 반환
+ * - 이체 실패/보상 완료 시 레코드 삭제 → 같은 키로 재시도 허용
  *
  * DB vs Redis:
  * - DB 선택 이유: Redis 장애 시에도 멱등성 보장 필요 (결제 중복은 치명적)
@@ -57,14 +57,18 @@ public class PaymentIdempotency {
     @Column(nullable = false, unique = true, length = 100)
     private String idempotencyKey;          // 클라이언트가 보낸 고유 키 (UUID 권장)
 
-    @Column(nullable = false)
-    private Long transactionId;             // 처리된 결제 트랜잭션 ID
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private IdempotencyStatus status;       // PROCESSING(진행 중) / COMPLETED(완료)
 
-    @Column(nullable = false)
-    private Long amount;                    // 결제 금액 (응답 재구성용)
+    @Column(nullable = true)
+    private Long transactionId;             // 처리된 결제 트랜잭션 ID (COMPLETED 시 설정)
 
-    @Column(nullable = false)
-    private Long cashbackAmount;            // 지급된 캐시백 금액 (응답 재구성용)
+    @Column(nullable = true)
+    private Long amount;                    // 결제 금액 (COMPLETED 시 설정, 응답 재구성용)
+
+    @Column(nullable = true)
+    private Long cashbackAmount;            // 지급된 캐시백 금액 (COMPLETED 시 설정)
 
     @Column(nullable = false)
     private LocalDateTime createdAt;        // 최초 처리 시각
@@ -72,13 +76,31 @@ public class PaymentIdempotency {
     @Column(nullable = false)
     private LocalDateTime expiresAt;        // 만료 시각 (createdAt + 24시간), 이후 동일 키 재사용 허용
 
-    @Builder
-    public PaymentIdempotency(String idempotencyKey, Long transactionId, Long amount, Long cashbackAmount) {
-        this.idempotencyKey = idempotencyKey;
+    /**
+     * 결제 처리 시작 시 PROCESSING 상태로 먼저 저장
+     * unique constraint 덕분에 동시 중복 요청 중 하나만 저장 성공
+     */
+    public static PaymentIdempotency createProcessing(String idempotencyKey) {
+        PaymentIdempotency record = new PaymentIdempotency();
+        record.idempotencyKey = idempotencyKey;
+        record.status = IdempotencyStatus.PROCESSING;
+        record.createdAt = LocalDateTime.now();
+        record.expiresAt = record.createdAt.plusHours(24); // [변경] 보관 기간 (현재 24시간)
+        return record;
+    }
+
+    /**
+     * 결제 완료 후 COMPLETED로 업데이트
+     * 이후 동일 키 재요청 시 여기 저장된 결과를 바로 반환
+     */
+    public void complete(Long transactionId, Long amount, Long cashbackAmount) {
+        this.status = IdempotencyStatus.COMPLETED;
         this.transactionId = transactionId;
         this.amount = amount;
         this.cashbackAmount = cashbackAmount;
-        this.createdAt = LocalDateTime.now();
-        this.expiresAt = this.createdAt.plusHours(24); // [변경] 보관 기간 (현재 24시간)
+    }
+
+    public boolean isCompleted() {
+        return this.status == IdempotencyStatus.COMPLETED;
     }
 }
