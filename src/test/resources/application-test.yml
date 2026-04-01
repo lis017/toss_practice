@@ -24,6 +24,8 @@ redis:
 cashback:
   budget:
     total: 100000000
+  virtual-account:
+    account-number: TOSS-VIRTUAL-001   # DataInitializer와 동일한 값
   external-bank:
     simulate-delay: false
     simulate-error: false

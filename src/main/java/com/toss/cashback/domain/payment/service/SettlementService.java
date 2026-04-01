@@ -13,6 +13,7 @@ import com.toss.cashback.infrastructure.api.ExternalBankService;
 import com.toss.cashback.infrastructure.redis.RedissonLockService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -48,6 +49,13 @@ public class SettlementService {
     private final ExternalBankService externalBankService;
     private final RedissonLockService redissonLockService;
     private final TransactionTemplate transactionTemplate;
+
+    // application.yml lock.account 에서 주입 (PaymentService와 동일한 계좌 락 설정 공유)
+    @Value("${lock.account.wait-seconds:5}")
+    private long lockWaitSeconds;
+
+    @Value("${lock.account.lease-seconds:30}")
+    private long lockLeaseSeconds;      // 정산은 배치 작업이나 동일한 DB 트랜잭션 특성 → 30s 동일 적용
 
     /**
      * 구매자 결제 완료 시 정산 레코드 생성 (PENDING 상태)
@@ -116,7 +124,7 @@ public class SettlementService {
                 "lock:account:" + Math.max(virtualAccountId, merchantAccountId)
         );
 
-        redissonLockService.executeWithMultiLock(lockKeys, 5, 10, () -> {
+        redissonLockService.executeWithMultiLock(lockKeys, lockWaitSeconds, lockLeaseSeconds, () -> {
             transactionTemplate.execute(status -> {
 
                 // 락 내에서 최신 상태로 재조회 (stale read 방지)

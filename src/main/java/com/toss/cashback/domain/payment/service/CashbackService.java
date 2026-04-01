@@ -9,6 +9,7 @@ import com.toss.cashback.global.error.ErrorCode;
 import com.toss.cashback.infrastructure.redis.RedissonLockService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -31,9 +32,14 @@ public class CashbackService {
     private final TransactionTemplate transactionTemplate;          // 락 내부에서 트랜잭션 경계 직접 제어
 
     private static final String CASHBACK_LOCK_KEY = "lock:cashback:budget";
-    private static final long LOCK_WAIT_TIME = 5L;
-    private static final long LOCK_LEASE_TIME = 3L;
     private static final double CASHBACK_RATE = 0.1;
+
+    // application.yml lock.cashback 에서 주입 (기본값: 운영 권장값)
+    @Value("${lock.cashback.wait-seconds:5}")
+    private long lockWaitSeconds;       // 락 획득 대기 시간 (초과 시 LOCK_ACQUISITION_FAILED)
+
+    @Value("${lock.cashback.lease-seconds:10}")
+    private long lockLeaseSeconds;      // 락 자동 해제 시간 (GC full pause ~5s × 2배 여유 = 10s)
 
     /** @return 지급된 캐시백 금액. 예산 소진 시 0 반환 */
     public long grantCashback(Long fromAccountId, Long paymentAmount) {
@@ -41,8 +47,8 @@ public class CashbackService {
 
         return redissonLockService.executeWithLock(
                 CASHBACK_LOCK_KEY,
-                LOCK_WAIT_TIME,
-                LOCK_LEASE_TIME,
+                lockWaitSeconds,
+                lockLeaseSeconds,
                 () -> transactionTemplate.execute(status ->
                         processGrantInternal(fromAccountId, cashbackAmount))
         );

@@ -9,6 +9,7 @@ import com.toss.cashback.global.error.ErrorCode;
 import com.toss.cashback.infrastructure.redis.RedissonLockService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -40,6 +41,13 @@ public class PaymentService {
     private final RedissonLockService redissonLockService;   // 계좌 이체 분산 락
     private final TransactionTemplate transactionTemplate;   // 락 내에서 트랜잭션 커밋 보장
 
+    // application.yml lock.account 에서 주입 (기본값: 운영 권장값)
+    @Value("${lock.account.wait-seconds:5}")
+    private long lockWaitSeconds;       // 락 획득 대기 시간
+
+    @Value("${lock.account.lease-seconds:30}")
+    private long lockLeaseSeconds;      // 락 자동 해제 시간 (GC full pause ~10s × 3배 여유 = 30s)
+
     /**
      * TX1: 구매자(A) → 가상계좌(C) 자금 이동 + 트랜잭션 레코드 생성
      *
@@ -65,7 +73,7 @@ public class PaymentService {
                 "lock:account:" + Math.max(fromAccountId, virtualAccountId)
         );
 
-        return redissonLockService.executeWithMultiLock(lockKeys, 5, 10, () ->
+        return redissonLockService.executeWithMultiLock(lockKeys, lockWaitSeconds, lockLeaseSeconds, () ->
                 transactionTemplate.execute(status -> {
 
                     Account buyer = accountRepository.findById(fromAccountId)
@@ -109,5 +117,16 @@ public class PaymentService {
                 .orElseThrow(() -> new CustomException(ErrorCode.INTERNAL_SERVER_ERROR));
         transaction.markPendingSettlement(cashbackAmount);
         log.info("[TX-1단계완료] 정산 대기 상태 변경 - txId={}, cashback={}", transactionId, cashbackAmount);
+    }
+
+    /**
+     * 외부 승인 완료 후 내부 후처리 실패 시 상태 기록.
+     * POST_PROCESS_FAILED = 외부 은행은 출금됐지만 내부 DB 처리 실패 → 불일치 상태.
+     * 이 메서드 자체가 실패하면 txId와 에러를 로그로 남겨 수동 복구 기반을 확보합니다.
+     */
+    @Transactional
+    public void markTransactionPostProcessFailed(Long transactionId, String reason) {
+        transactionRepository.findById(transactionId).ifPresent(tx -> tx.markPostProcessFailed(reason));
+        log.error("[후처리실패] 트랜잭션 상태 기록 - txId={}", transactionId);
     }
 }

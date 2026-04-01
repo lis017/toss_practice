@@ -101,4 +101,25 @@ public class PaymentTransaction {
         this.status = PaymentStatus.FAILED;
         this.failureReason = reason;
     }
+
+    /**
+     * 외부 은행 승인 완료 후 내부 후처리(이체 or 정산 레코드 생성 등) 실패 시 호출.
+     * 이 상태는 외부 은행에서 이미 출금이 완료됐으나 내부 DB 처리가 안 된 위험한 불일치 상태를 의미합니다.
+     * 반드시 운영팀 수동 확인이 필요합니다.
+     *
+     * [운영 복구 가이드]
+     * 1. payment_transactions 테이블에서 POST_PROCESS_FAILED 건 조회
+     * 2. 외부 은행에 해당 승인 건의 실제 처리 여부 확인
+     * 3. 이체가 실제로 안 됐다면: 외부 은행 승인 취소 API 호출
+     * 4. 이체는 됐는데 정산 레코드가 없다면: settlement_records에 수동 삽입
+     * 5. 처리 완료 후 이 트랜잭션 상태를 PENDING_SETTLEMENT 또는 FAILED로 수동 업데이트
+     *
+     * [자동 재시도 확장 포인트]
+     * RetryablePaymentQueue 같은 대기열을 도입하면 자동 재처리 가능.
+     * 현재는 운영팀 알림(Slack/PagerDuty) + 수동 복구로 처리합니다.
+     */
+    public void markPostProcessFailed(String reason) {
+        this.status = PaymentStatus.POST_PROCESS_FAILED;
+        this.failureReason = reason;
+    }
 }

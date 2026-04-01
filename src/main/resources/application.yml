@@ -54,6 +54,31 @@ management:
       prometheus:
         enabled: true                    # Prometheus 메트릭 수집 활성화
 
+# ======================== 분산 락 설정 (Redisson) ========================
+#
+# leaseTime 산정 근거 (서버 크래시 시 락 자동 해제 시간):
+#   - DB 연산 정상:          ~50ms
+#   - DB 슬로우 쿼리(부하):  ~500ms
+#   - GC minor pause:        ~1s
+#   - GC full pause (G1GC):  ~5~10s  ← 핵심 변수
+#   → account(이체): GC 최악(10s) × 3배 여유 = 30s
+#   → cashback(단순 예산 조회):  GC 최악(5s) × 2배 여유 = 10s  (기존 3s는 GC pause 고려 시 위험)
+#
+# waitTime 산정 근거 (락 획득 대기 시간):
+#   - 동시 10건: 10 × 50ms = 500ms 대기
+#   - 동시 100건: 최악 5s 대기
+#   → 5s: 초과 시 LOCK_ACQUISITION_FAILED 반환 (빠른 실패로 스레드 pileup 방지)
+#
+# [고급 대안] leaseTime=-1 설정 시 Redisson WatchDog이 10초마다 자동 연장
+#   → 무한 연장이라 서버 크래시 복구 시점 예측 불가 → 명시적 leaseTime 선호
+lock:
+  account:
+    wait-seconds: 5    # 락 획득 대기 시간 (초과 시 LOCK_ACQUISITION_FAILED)
+    lease-seconds: 30  # 크래시/GC full pause 대비 자동 해제 시간 (GC 최악 10s × 3배)
+  cashback:
+    wait-seconds: 5
+    lease-seconds: 10  # 단순 DB 연산이나 GC pause 필수 고려 (기존 3s → 10s, GC 최악 5s × 2배)
+
 # ======================== 캐시백 이벤트 설정 ========================
 cashback:
   budget:
