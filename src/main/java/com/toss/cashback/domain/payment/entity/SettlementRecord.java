@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 // ======= [2번] 정산 레코드 엔티티 =======
@@ -17,13 +18,13 @@ import java.time.LocalDateTime;
  *
  * 핵심 역할:
  * 1. 정산 대상 추적: 가상계좌(C)에서 가맹점(B)으로 보내야 할 금액 기록
- * 2. 재시도 안전성: 정산 실패 시 PENDING 유지 → 다음 정산 주기 자동 재시도
- * 3. 원본 연결: paymentTransactionId로 구매자 결제와 연결 (감사 추적)
+ * 2. 금액 내역 저장: grossAmount / feeAmount / vatAmount / netAmount 분리 보관
+ * 3. 재시도 안전성: 정산 실패 시 PENDING 유지 → 다음 정산 주기 자동 재시도
+ * 4. 원본 연결: paymentTransactionId로 구매자 결제와 연결 (감사 추적)
  *
- * 실제 PG 정산 구조:
- * - 구매자 결제 즉시: SettlementRecord 생성 (PENDING)
- * - 매일 정산 시간: SettlementScheduler가 PENDING 건 일괄 처리 → SETTLED
- * - 정산 실패 시:  PENDING 유지 → 다음 날 재시도 (구매자 환불 없음)
+ * 금액 흐름:
+ *   구매자 결제 → grossAmount 전액이 가상계좌에 보관
+ *   정산 시 → netAmount만 가맹점에 입금 (feeAmount + vatAmount는 PG 수익)
  *
  * 실제 PG(토스페이먼츠)에서는 D+1, D+2 정산 주기로 운영됩니다.
  * =====================================================================
@@ -33,7 +34,8 @@ import java.time.LocalDateTime;
     name = "settlement_records",
     indexes = {
         @Index(name = "idx_settlement_status", columnList = "status"),
-        @Index(name = "idx_settlement_merchant", columnList = "merchantAccountId")
+        @Index(name = "idx_settlement_merchant", columnList = "merchantAccountId"),
+        @Index(name = "idx_settlement_expected_date", columnList = "expectedSettlementDate")
     }
 )
 @Getter
@@ -53,8 +55,24 @@ public class SettlementRecord {
     @Column(nullable = false)
     private Long merchantAccountId;         // 가맹점 계좌 ID (정산 대상)
 
+    // =====================================================================
+    // [정산 금액 내역] SettlementCalculator.calculate()로 생성되며, 변경 불가
+    // =====================================================================
+
     @Column(nullable = false)
-    private Long amount;                    // 정산 금액
+    private Long grossAmount;               // 결제 원금 (구매자가 낸 전체 금액)
+
+    @Column(nullable = false)
+    private Long feeAmount;                 // 수수료 금액 (grossAmount × feeRate)
+
+    @Column(nullable = false)
+    private Long vatAmount;                 // 부가세 금액 (feeAmount × 10%, vatIncluded=false면 0)
+
+    @Column(nullable = false)
+    private Long netAmount;                 // 실지급액 (grossAmount - feeAmount - vatAmount, 가맹점 수령액)
+
+    @Column(nullable = false)
+    private LocalDate expectedSettlementDate;  // 정산 예정일 (오늘 + settlementCycleDays)
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -72,14 +90,21 @@ public class SettlementRecord {
     @UpdateTimestamp
     private LocalDateTime updatedAt;
 
-    /** 구매자 결제 완료 시 정산 레코드 생성 (PENDING 상태로 시작) */
+    /**
+     * 구매자 결제 완료 시 정산 레코드 생성 (PENDING 상태로 시작)
+     * 금액 내역은 SettlementCalculator.calculate()의 결과를 그대로 저장합니다.
+     */
     public static SettlementRecord createPending(Long paymentTransactionId, Long virtualAccountId,
-                                                  Long merchantAccountId, Long amount) {
+                                                  Long merchantAccountId, SettlementAmountResult calculation) {
         SettlementRecord record = new SettlementRecord();
         record.paymentTransactionId = paymentTransactionId;
         record.virtualAccountId = virtualAccountId;
         record.merchantAccountId = merchantAccountId;
-        record.amount = amount;
+        record.grossAmount = calculation.getGrossAmount();
+        record.feeAmount = calculation.getFeeAmount();
+        record.vatAmount = calculation.getVatAmount();
+        record.netAmount = calculation.getNetAmount();
+        record.expectedSettlementDate = calculation.getExpectedSettlementDate();
         record.status = SettlementStatus.PENDING;
         return record;
     }

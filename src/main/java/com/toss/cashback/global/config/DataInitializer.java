@@ -4,6 +4,8 @@ import com.toss.cashback.domain.account.entity.Account;
 import com.toss.cashback.domain.account.repository.AccountRepository;
 import com.toss.cashback.domain.cashback.entity.CashbackBudget;
 import com.toss.cashback.domain.cashback.repository.CashbackBudgetRepository;
+import com.toss.cashback.domain.payment.entity.MerchantSettlementPolicy;
+import com.toss.cashback.domain.payment.repository.MerchantSettlementPolicyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,6 +13,8 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
 
 // ======= [11번] 초기 데이터 세팅 (테스트 계좌 + 캐시백 예산) =======
 /**
@@ -28,6 +32,7 @@ public class DataInitializer implements ApplicationRunner {
 
     private final AccountRepository accountRepository;
     private final CashbackBudgetRepository cashbackBudgetRepository;
+    private final MerchantSettlementPolicyRepository settlementPolicyRepository;
 
     @Value("${cashback.budget.total:100000000}")        // application.yml에서 조정 가능
     private Long totalBudget;
@@ -40,6 +45,8 @@ public class DataInitializer implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         initCashbackBudget();
         initTestAccounts();
+        // 계좌 초기화 이후 실행 (merchantId가 필요하므로)
+        initMerchantSettlementPolicy();
     }
 
     private void initCashbackBudget() {
@@ -83,5 +90,31 @@ public class DataInitializer implements ApplicationRunner {
         } else {
             log.info("[초기화] 테스트 계좌 이미 존재 - 스킵");
         }
+    }
+
+    /**
+     * 토스상점(테스트 가맹점)의 정산 정책 초기화.
+     * 정책이 없으면 기본값(3.5% / VAT포함 / D+1)으로 등록합니다.
+     *
+     * 실제 운영에서는 가맹점 계약 완료 시 관리자 API나 배치로 정책을 등록합니다.
+     */
+    private void initMerchantSettlementPolicy() {
+        if (settlementPolicyRepository.count() > 0) {
+            log.info("[초기화] 정산 정책 이미 존재 - 스킵");
+            return;
+        }
+
+        // 토스상점 계좌 조회 (DataInitializer에서 생성된 계좌)
+        accountRepository.findByAccountNumber("220-9876-5432").ifPresent(merchantAccount -> {
+            MerchantSettlementPolicy policy = MerchantSettlementPolicy.create(
+                    merchantAccount.getId(),
+                    new BigDecimal("0.0350"),   // 수수료 3.5%
+                    true,                        // 부가세 포함
+                    1                            // D+1 정산
+            );
+            settlementPolicyRepository.save(policy);
+            log.info("[초기화] 가맹점 정산 정책 등록 - merchantId={}, feeRate=3.5%, VAT=포함, D+1",
+                    merchantAccount.getId());
+        });
     }
 }

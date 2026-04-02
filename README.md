@@ -8,12 +8,13 @@ Spring Boot 3.2 / Java 17 / MySQL / Redis(Redisson)
 
 1. [요구사항 분석](#요구사항-분석)
 2. [설계하면서 고민했던 것들](#설계하면서-고민했던-것들)
-3. [실행](#실행)
-4. [테스트 실행](#테스트-실행)
-5. [API](#api)
-6. [장애 시나리오 테스트](#장애-시나리오-테스트)
-7. [API 실행 테스트 .http 파일](#api-실행-테스트-http-파일)
-8. [헬스체크](#헬스체크)
+3. [정산 계산 규칙](#정산-계산-규칙)
+4. [실행](#실행)
+5. [테스트 실행](#테스트-실행)
+6. [API](#api)
+7. [장애 시나리오 테스트](#장애-시나리오-테스트)
+8. [API 실행 테스트 .http 파일](#api-실행-테스트-http-파일)
+9. [헬스체크](#헬스체크)
 
 ---
 
@@ -28,6 +29,7 @@ Spring Boot 3.2 / Java 17 / MySQL / Redis(Redisson)
 | F3 | 캐시백 10% 지급 (한정 예산) | `CashbackService.grantCashback()` |
 | F4 | 중복 결제 방지 (멱등성 키) | `PaymentFacade.getOrCreateIdempotencyRecord()` |
 | F5 | 결제 이력 저장 | `PaymentTransaction` 엔티티 |
+| F6 | 가맹점별 정산 수수료/VAT/주기 관리 | `MerchantSettlementPolicy`, `SettlementCalculator` |
 
 ### 비기능 요구사항 (안정성)
 
@@ -83,6 +85,54 @@ PENDING_SETTLEMENT
 SUCCESS
 
 PENDING → FAILED  (비즈니스 예외 - 잔액 부족 등)
+```
+
+---
+
+## 정산 계산 규칙
+
+### 가맹점별 정산 정책 (MerchantSettlementPolicy)
+
+가맹점마다 협의된 수수료율·VAT 여부·정산 주기가 다를 수 있습니다.
+
+| 항목 | 설명 | 예시 |
+|------|------|------|
+| `feeRate` | 수수료율 | `0.0350` = 3.5% |
+| `vatIncluded` | 수수료에 부가세(10%) 별도 부과 여부 | `true` = 수수료의 10% 추가 |
+| `settlementCycleDays` | 정산 주기 | `1` = D+1, `2` = D+2 |
+
+정책 미등록 가맹점은 기본 정책(수수료 3.5% / VAT 포함 / D+1)이 자동 적용됩니다.
+
+### 금액 계산 공식 (SettlementCalculator)
+
+```
+feeAmount  = grossAmount × feeRate          (HALF_EVEN 반올림)
+vatAmount  = feeAmount × 0.10              (vatIncluded=true 일 때만)
+netAmount  = grossAmount - feeAmount - vatAmount
+```
+
+**HALF_EVEN(은행가 반올림) 선택 이유:**
+- 소수점 정확히 0.5인 경계에서 "가까운 짝수" 방향으로 반올림
+- 대량 정산 건 처리 시 반올림 오차가 통계적으로 상쇄됨 (금융권 표준)
+- HALF_UP은 항상 올림 → PG 또는 가맹점이 지속적으로 손해
+
+### 계산 예시 (100,000원 결제, 기본 정책)
+
+```
+grossAmount  =  100,000원  (구매자가 낸 금액)
+feeAmount    =    3,500원  (100,000 × 3.5%)
+vatAmount    =      350원  (3,500 × 10%)
+netAmount    =   96,150원  (가맹점 실수령액)
+PG 수익      =    3,850원  (feeAmount + vatAmount, 가상계좌 잔류)
+```
+
+### 정산 흐름에서의 금액 이동
+
+```
+[결제 시점] 구매자 출금 → grossAmount(100,000원) 전액 가상계좌에 보관
+
+[정산 시점] 가상계좌 → netAmount(96,150원)만 가맹점에 입금
+            나머지 3,850원(fee+vat)은 가상계좌 잔류 = PG 수익
 ```
 
 ---

@@ -1,0 +1,23 @@
+# ======================== 로컬 개발 오버라이드 ========================
+# 활성화 방법: SPRING_PROFILES_ACTIVE=local (IntelliJ Run Config, IDE 환경변수)
+# Docker Compose 로컬 개발 시: docker-compose.yml environment에 SPRING_PROFILES_ACTIVE=local 추가
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update          # 로컬: 스키마 자동 생성/갱신
+    show-sql: true              # 로컬: SQL 로그 출력
+    properties:
+      hibernate:
+        format_sql: true        # 로컬: SQL 보기 좋게 포매팅
+
+  management:
+    endpoint:
+      health:
+        show-details: always    # 로컬: DB/Redis 상세 헬스 정보 노출
+
+logging:
+  level:
+    com.toss.cashback: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql: TRACE  # SQL 파라미터 값까지 로깅

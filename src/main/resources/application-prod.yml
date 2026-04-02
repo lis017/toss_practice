@@ -1,0 +1,31 @@
+# ======================== 운영 환경 오버라이드 ========================
+# 활성화 방법: SPRING_PROFILES_ACTIVE=prod
+# 운영 서버 배포 시 환경변수로 주입:
+#   DB_HOST, DB_PORT, DB_USERNAME, DB_PASSWORD
+#   REDIS_HOST, REDIS_PORT
+
+spring:
+  jpa:
+    hibernate:
+      # 운영: 스키마 변경은 Flyway/Liquibase로 관리. 앱이 직접 수정하지 않음
+      # 마이그레이션 도구 미사용 시 none으로 변경 (더 엄격)
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+management:
+  endpoint:
+    health:
+      show-details: when_authorized   # 운영: 인증된 요청에만 상세 노출
+  endpoints:
+    web:
+      exposure:
+        include: health, info         # 운영: prometheus 노출 범위 축소 (내부망에서만 허용)
+
+logging:
+  level:
+    com.toss.cashback: INFO
+    org.hibernate.SQL: OFF
+    org.springframework: WARN

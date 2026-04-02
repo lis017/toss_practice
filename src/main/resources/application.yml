@@ -19,13 +19,16 @@ spring:
   # ======================== JPA / Hibernate ========================
   jpa:
     hibernate:
-      ddl-auto: update                   # [변경] 운영 환경에서는 'validate' 또는 'none'으로 변경
-      # update: 앱 시작 시 스키마 자동 갱신 (컬럼 추가 가능, 삭제 불가)
-    show-sql: false                      # [변경] 개발 중 SQL 확인 필요 시 true로 변경
+      # ddl-auto는 프로파일에서 오버라이드
+      # - local:  update  (application-local.yml)
+      # - prod:   validate (application-prod.yml)
+      # - 기본값: update (Docker 실행 환경에서 스키마 자동 생성)
+      ddl-auto: update
+    show-sql: false                      # SQL 로그: application-local.yml에서 true로 오버라이드
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
-        format_sql: true                 # SQL 로그 출력 시 보기 좋게 포매팅
+        format_sql: false                # SQL 포맷: 운영에서는 불필요한 로그 비용 방지
 
 # ======================== Redis (Redisson 연결 정보) ========================
 # RedissonConfig.java에서 @Value로 주입받아 사용
@@ -48,7 +51,8 @@ management:
         include: health, info, metrics, prometheus  # 외부에 노출할 엔드포인트
   endpoint:
     health:
-      show-details: always               # 헬스체크에서 DB/Redis 상태까지 상세 노출
+      show-details: when_authorized      # 운영: 인증된 요청에만 DB/Redis 상세 노출 (보안)
+      # 로컬 개발 시 always로 변경하려면 application-local.yml에서 오버라이드
   metrics:
     export:
       prometheus:
@@ -110,8 +114,9 @@ resilience4j:
           - com.toss.cashback.global.error.CustomException
 
 # ======================== 로깅 ========================
+# 운영 기본값: INFO/OFF
+# 로컬 개발 상세 로그: SPRING_PROFILES_ACTIVE=local → application-local.yml 적용
 logging:
   level:
-    com.toss.cashback: DEBUG             # [변경] 운영 환경에서는 INFO로 변경
-    org.hibernate.SQL: DEBUG             # [변경] 운영 환경에서는 WARN으로 변경
-    org.hibernate.type.descriptor.sql: TRACE  # SQL 파라미터 값 로깅 (운영에서는 제거)
+    com.toss.cashback: INFO
+    org.hibernate.SQL: OFF               # SQL 로그 기본 비활성화 (로컬에서만 DEBUG)
