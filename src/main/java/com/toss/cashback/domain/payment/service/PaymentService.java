@@ -112,11 +112,11 @@ public class PaymentService {
 
     /** TX-1단계완료: 구매자 출금 + 가상계좌 보관 완료. 정산 대기 상태로 변경 */
     @Transactional
-    public void markTransactionPendingSettlement(Long transactionId, Long cashbackAmount) {
+    public void markTransactionPendingSettlement(Long transactionId) {
         PaymentTransaction transaction = transactionRepository.findById(transactionId)
                 .orElseThrow(() -> new CustomException(ErrorCode.INTERNAL_SERVER_ERROR));
-        transaction.markPendingSettlement(cashbackAmount);
-        log.info("[TX-1단계완료] 정산 대기 상태 변경 - txId={}, cashback={}", transactionId, cashbackAmount);
+        transaction.markPendingSettlement();
+        log.info("[TX-1단계완료] 정산 대기 상태 변경 - txId={}", transactionId);
     }
 
     /**

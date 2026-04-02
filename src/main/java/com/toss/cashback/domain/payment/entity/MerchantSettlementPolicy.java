@@ -64,6 +64,9 @@ public class MerchantSettlementPolicy {
     @Column(nullable = false)
     private int settlementCycleDays;        // 정산 주기 일수 (1=D+1, 2=D+2)
 
+    @Column(length = 500)
+    private String webhookUrl;              // 결제 완료 알림 수신 URL (null이면 웹훅 미발송)
+
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;
@@ -95,5 +98,10 @@ public class MerchantSettlementPolicy {
      */
     public static MerchantSettlementPolicy createDefault(Long merchantAccountId) {
         return create(merchantAccountId, new BigDecimal("0.0350"), true, 1);
+    }
+
+    /** 가맹점 웹훅 URL 등록/변경 */
+    public void updateWebhookUrl(String webhookUrl) {
+        this.webhookUrl = webhookUrl;
     }
 }

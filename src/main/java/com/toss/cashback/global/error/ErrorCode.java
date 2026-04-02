@@ -18,10 +18,8 @@ public enum ErrorCode {
     SAME_ACCOUNT_TRANSFER(HttpStatus.BAD_REQUEST, "A003", "동일한 계좌로는 이체할 수 없습니다"),
     INVALID_AMOUNT(HttpStatus.BAD_REQUEST, "A004", "결제 금액이 유효하지 않습니다 (0보다 커야 합니다)"),
 
-    // ======================== C: 캐시백 관련 에러 ========================
-    CASHBACK_BUDGET_EXCEEDED(HttpStatus.OK, "C001", "캐시백 이벤트 예산이 모두 소진되었습니다"),
-    CASHBACK_BUDGET_NOT_FOUND(HttpStatus.INTERNAL_SERVER_ERROR, "C002", "캐시백 예산 정보를 찾을 수 없습니다"),
-    LOCK_ACQUISITION_FAILED(HttpStatus.CONFLICT, "C003", "요청이 많아 처리 중입니다. 잠시 후 다시 시도해주세요"),
+    // ======================== C: 동시성 관련 에러 ========================
+    LOCK_ACQUISITION_FAILED(HttpStatus.CONFLICT, "C001", "요청이 많아 처리 중입니다. 잠시 후 다시 시도해주세요"),
 
     // ======================== E: 외부 은행 API 관련 에러 ========================
     EXTERNAL_BANK_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "E001", "외부 은행 API 응답 시간이 초과되었습니다"),

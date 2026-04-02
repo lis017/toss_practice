@@ -39,7 +39,7 @@ import org.springframework.stereotype.Service;
  * - 결제 시작 전 PROCESSING 상태로 선등록 (unique constraint로 동시 중복 요청 차단)
  * - 처리 완료 후 COMPLETED로 업데이트
  * - 외부 API 실패(STEP 1): 레코드 삭제 → 같은 키로 재시도 허용
- * - 외부 API 성공 후 후처리 실패(STEP 2~5): 레코드 PROCESSING 유지 → 자동 재시도 차단
+ * - 외부 API 성공 후 후처리 실패(STEP 2~4): 레코드 PROCESSING 유지 → 자동 재시도 차단
  *   (이유: 은행은 이미 출금 처리했을 수 있어 동일 키로 재결제 시 이중 청구 위험)
  */
 @Slf4j
@@ -49,8 +49,8 @@ public class PaymentFacade {
 
     private final PaymentService paymentService;
     private final ExternalBankService externalBankService;
-    private final CashbackService cashbackService;
     private final SettlementService settlementService;
+    private final WebhookService webhookService;
     private final PaymentIdempotencyRepository idempotencyRepository;
     private final AccountRepository accountRepository;
 
@@ -89,8 +89,7 @@ public class PaymentFacade {
                     request.getIdempotencyKey(), idempotencyRecord.getTransactionId());
             return PaymentResponse.success(
                     idempotencyRecord.getTransactionId(),
-                    idempotencyRecord.getAmount(),
-                    idempotencyRecord.getCashbackAmount()
+                    idempotencyRecord.getAmount()
             );
         }
 
@@ -122,30 +121,19 @@ public class PaymentFacade {
                     request.getFromAccountId(), request.getAmount(), request.getIdempotencyKey(), e.getMessage());
             log.error("[복구 가이드] 1) 외부 은행에 해당 승인 건 실제 처리 여부 확인" +
                     " 2) 출금 확인됐다면 수동 이체 처리 또는 외부 은행 승인 취소 요청");
-            // [자동화 확장 포인트] RetryablePaymentQueue에 적재 → 재처리 워커가 이체 재시도 가능
             throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
 
-        // STEP 3~5: 후처리 (이체 완료가 전제 - 실패 시 POST_PROCESS_FAILED 기록)
-        // cashbackAmount를 블록 바깥에 선언 → catch와 이후 응답 구성에서 접근 가능
-        long cashbackAmount = 0L;
+        // STEP 3~4: 후처리 (이체 완료가 전제 - 실패 시 POST_PROCESS_FAILED 기록)
         try {
             // STEP 3: 정산 레코드 생성 (PENDING 상태로 등록 → 스케줄러가 처리)
             settlementService.createSettlementRecord(
                     transactionId, virtualAccountId, request.getToAccountId(), request.getAmount());
             log.info("[STEP 3 완료] 정산 레코드 등록 - txId={}, merchant={}", transactionId, request.getToAccountId());
 
-            // STEP 4: 캐시백 지급 - 어떤 이유로든 캐시백 실패는 결제 실패로 이어지지 않음
-            // 외부 승인이 완료된 시점 이후의 캐시백 오류는 캐시백 미지급으로만 처리
-            try {
-                cashbackAmount = cashbackService.grantCashback(request.getFromAccountId(), request.getAmount());
-            } catch (Exception cashbackEx) {
-                log.warn("[캐시백 미지급] txId={}, reason={}", transactionId, cashbackEx.getMessage());
-            }
-
-            // STEP 5: 트랜잭션 PENDING_SETTLEMENT 상태 업데이트
-            paymentService.markTransactionPendingSettlement(transactionId, cashbackAmount);
-            log.info("[STEP 5 완료] 정산 대기 상태 - txId={}, cashback={}", transactionId, cashbackAmount);
+            // STEP 4: 트랜잭션 PENDING_SETTLEMENT 상태 업데이트
+            paymentService.markTransactionPendingSettlement(transactionId);
+            log.info("[STEP 4 완료] 정산 대기 상태 - txId={}", transactionId);
 
         } catch (Exception postProcessEx) {
             // [긴급] 이체 완료 후 후처리(정산 등록 or 상태 업데이트) 실패
@@ -155,17 +143,23 @@ public class PaymentFacade {
             log.error("[복구 가이드] 1) payment_transactions에서 txId={} 건 확인" +
                     " 2) settlement_records에 해당 건 수동 삽입 여부 확인" +
                     " 3) 정상화 후 status를 PENDING_SETTLEMENT로 수동 업데이트", transactionId);
-            // [자동화 확장 포인트] SettlementRepairBatch로 POST_PROCESS_FAILED 건 주기적 재처리 가능
             paymentService.markTransactionPostProcessFailed(transactionId, postProcessEx.getMessage());
             throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
 
         // 멱등성 레코드 COMPLETED로 업데이트 (다음 동일 요청은 이 결과를 바로 반환)
-        idempotencyRecord.complete(transactionId, request.getAmount(), cashbackAmount);
+        idempotencyRecord.complete(transactionId, request.getAmount());
         idempotencyRepository.save(idempotencyRecord);
 
+        // 웹훅 발송 (실패해도 결제 응답에는 영향 없음)
+        try {
+            webhookService.sendPaymentCompleted(transactionId, request.getToAccountId(), request.getAmount());
+        } catch (Exception e) {
+            log.warn("[웹훅] 서비스 예외 발생 (결제 응답에 영향 없음) - txId={}", transactionId);
+        }
+
         // 구매자 입장에서는 결제 완료 응답 반환 (가맹점 정산은 스케줄러가 처리)
-        return PaymentResponse.success(transactionId, request.getAmount(), cashbackAmount);
+        return PaymentResponse.success(transactionId, request.getAmount());
     }
 
     /**

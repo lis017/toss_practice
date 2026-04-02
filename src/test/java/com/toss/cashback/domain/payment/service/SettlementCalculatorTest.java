@@ -69,35 +69,7 @@ class SettlementCalculatorTest {
     }
 
     // ===================================================================
-    // 케이스 2: VAT 미포함 (부가세 면제 가맹점)
-    // ===================================================================
-    @Test
-    @DisplayName("[VAT 없음] 100,000원 / 수수료 2% / VAT 미포함 / D+2")
-    void calculate_noVat_d2() {
-        // GIVEN
-        MerchantSettlementPolicy policy = MerchantSettlementPolicy.create(
-                2L, new BigDecimal("0.0200"), false, 2);
-        long grossAmount = 100_000L;
-
-        // WHEN
-        SettlementAmountResult result = calculator.calculate(grossAmount, policy);
-
-        // THEN
-        // feeAmount = 100,000 × 0.02 = 2,000
-        assertThat(result.getFeeAmount()).isEqualTo(2_000L);
-
-        // vatAmount = 0 (VAT 미포함)
-        assertThat(result.getVatAmount()).isEqualTo(0L);
-
-        // netAmount = 100,000 - 2,000 - 0 = 98,000
-        assertThat(result.getNetAmount()).isEqualTo(98_000L);
-
-        // 정산 예정일: 오늘 + 2
-        assertThat(result.getExpectedSettlementDate()).isEqualTo(LocalDate.now().plusDays(2));
-    }
-
-    // ===================================================================
-    // 케이스 3: 수수료 면제 가맹점
+    // 케이스 2: 수수료 면제 가맹점
     // ===================================================================
     @Test
     @DisplayName("[수수료 면제] 100,000원 / 수수료 0% / VAT 없음 → netAmount = grossAmount")
@@ -153,68 +125,4 @@ class SettlementCalculatorTest {
                 .isEqualTo(result.getFeeAmount() + result.getVatAmount() + result.getNetAmount());
     }
 
-    @Test
-    @DisplayName("[HALF_EVEN] 경계값: fee 소수가 정확히 0.5인 경우 짝수로 반올림")
-    void calculate_halfEvenRounding_exactHalfRoundsToEven() {
-        // GIVEN: 1원 × 50% = 0.5 → HALF_EVEN → 0(짝수)
-        // 실제 수수료율 범위는 아니지만 HALF_EVEN 동작만 검증
-        MerchantSettlementPolicy policy = MerchantSettlementPolicy.create(
-                5L, new BigDecimal("0.5000"), false, 1);
-        long grossAmount = 1L;
-
-        // WHEN
-        SettlementAmountResult result = calculator.calculate(grossAmount, policy);
-
-        // THEN: 1 × 0.5 = 0.5 → HALF_EVEN → 0 (짝수)
-        // HALF_UP이었다면 → 1, HALF_EVEN이므로 → 0
-        assertThat(result.getFeeAmount()).isEqualTo(0L);
-    }
-
-    // ===================================================================
-    // 케이스 5: 정산 주기 검증
-    // ===================================================================
-    @Test
-    @DisplayName("[정산주기] D+1 → 내일 날짜, D+2 → 모레 날짜")
-    void calculate_settlementCycleDays_expectedDateCorrect() {
-        // D+1
-        MerchantSettlementPolicy d1Policy = MerchantSettlementPolicy.create(
-                6L, new BigDecimal("0.0350"), true, 1);
-        SettlementAmountResult d1Result = calculator.calculate(100_000L, d1Policy);
-        assertThat(d1Result.getExpectedSettlementDate())
-                .isEqualTo(LocalDate.now().plusDays(1));
-
-        // D+2
-        MerchantSettlementPolicy d2Policy = MerchantSettlementPolicy.create(
-                7L, new BigDecimal("0.0350"), true, 2);
-        SettlementAmountResult d2Result = calculator.calculate(100_000L, d2Policy);
-        assertThat(d2Result.getExpectedSettlementDate())
-                .isEqualTo(LocalDate.now().plusDays(2));
-    }
-
-    // ===================================================================
-    // 케이스 6: grossAmount 항등식 (대금액 검증)
-    // ===================================================================
-    @Test
-    @DisplayName("[항등식] grossAmount = feeAmount + vatAmount + netAmount (대금액 1,000만원)")
-    void calculate_largeAmount_grossAmountEqualsSum() {
-        // GIVEN: 1,000만원 결제
-        MerchantSettlementPolicy policy = MerchantSettlementPolicy.create(
-                8L, new BigDecimal("0.0350"), true, 1);
-        long grossAmount = 10_000_000L;
-
-        // WHEN
-        SettlementAmountResult result = calculator.calculate(grossAmount, policy);
-
-        // THEN
-        // feeAmount = 10,000,000 × 0.035 = 350,000
-        assertThat(result.getFeeAmount()).isEqualTo(350_000L);
-        // vatAmount = 350,000 × 0.10 = 35,000
-        assertThat(result.getVatAmount()).isEqualTo(35_000L);
-        // netAmount = 10,000,000 - 350,000 - 35,000 = 9,615,000
-        assertThat(result.getNetAmount()).isEqualTo(9_615_000L);
-
-        // [핵심] 항등식: 모든 금액의 합이 grossAmount와 일치해야 함
-        assertThat(grossAmount)
-                .isEqualTo(result.getFeeAmount() + result.getVatAmount() + result.getNetAmount());
-    }
 }

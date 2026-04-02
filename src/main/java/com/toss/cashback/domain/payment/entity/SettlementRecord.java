@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -74,6 +75,17 @@ public class SettlementRecord {
     @Column(nullable = false)
     private LocalDate expectedSettlementDate;  // 정산 예정일 (오늘 + settlementCycleDays)
 
+    // ============================================================
+    // [정책 스냅샷] 계산 당시의 정산 정책 값을 그대로 저장
+    // 이후 MerchantSettlementPolicy가 변경되어도 역추적 가능
+    // (참고: 토스페이먼츠 정산 개편기 - 설정 정보 스냅샷 패턴)
+    // ============================================================
+    @Column(nullable = false, precision = 5, scale = 4)
+    private BigDecimal policyFeeRate;       // 적용된 수수료율 스냅샷 (예: 0.0350)
+
+    @Column(nullable = false)
+    private boolean policyVatIncluded;      // 적용된 VAT 포함 여부 스냅샷
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private SettlementStatus status;
@@ -105,6 +117,8 @@ public class SettlementRecord {
         record.vatAmount = calculation.getVatAmount();
         record.netAmount = calculation.getNetAmount();
         record.expectedSettlementDate = calculation.getExpectedSettlementDate();
+        record.policyFeeRate = calculation.getAppliedFeeRate();    // 정책 스냅샷 저장
+        record.policyVatIncluded = calculation.isVatIncluded();    // 정책 스냅샷 저장
         record.status = SettlementStatus.PENDING;
         return record;
     }

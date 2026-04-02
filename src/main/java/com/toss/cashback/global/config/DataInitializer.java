@@ -2,8 +2,6 @@ package com.toss.cashback.global.config;
 
 import com.toss.cashback.domain.account.entity.Account;
 import com.toss.cashback.domain.account.repository.AccountRepository;
-import com.toss.cashback.domain.cashback.entity.CashbackBudget;
-import com.toss.cashback.domain.cashback.repository.CashbackBudgetRepository;
 import com.toss.cashback.domain.payment.entity.MerchantSettlementPolicy;
 import com.toss.cashback.domain.payment.repository.MerchantSettlementPolicyRepository;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 
-// ======= [11번] 초기 데이터 세팅 (테스트 계좌 + 캐시백 예산) =======
+// ======= [11번] 초기 데이터 세팅 (테스트 계좌 + 정산 정책) =======
 /**
  * 서버 시작 시 초기 데이터 세팅. 운영 환경이면 Flyway로 대체해야 합니다.
  *
@@ -31,11 +29,7 @@ import java.math.BigDecimal;
 public class DataInitializer implements ApplicationRunner {
 
     private final AccountRepository accountRepository;
-    private final CashbackBudgetRepository cashbackBudgetRepository;
     private final MerchantSettlementPolicyRepository settlementPolicyRepository;
-
-    @Value("${cashback.budget.total:100000000}")        // application.yml에서 조정 가능
-    private Long totalBudget;
 
     @Value("${cashback.virtual-account.account-number:TOSS-VIRTUAL-001}")
     private String virtualAccountNumber;
@@ -43,24 +37,13 @@ public class DataInitializer implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        initCashbackBudget();
         initTestAccounts();
         // 계좌 초기화 이후 실행 (merchantId가 필요하므로)
         initMerchantSettlementPolicy();
     }
 
-    private void initCashbackBudget() {
-        if (cashbackBudgetRepository.count() == 0) {
-            cashbackBudgetRepository.save(new CashbackBudget(totalBudget));
-            log.info("[초기화] 캐시백 예산 생성 - 총 예산: {}원", totalBudget);
-        } else {
-            log.info("[초기화] 캐시백 예산 이미 존재 - 스킵");
-        }
-    }
-
     private void initTestAccounts() {
         if (accountRepository.count() == 0) {
-            // [변경] 아래 계좌 정보(번호, 이름, 잔액)를 원하는 값으로 수정하세요
             Account buyer = accountRepository.save(Account.builder()
                     .accountNumber("110-1234-5678")
                     .ownerName("김철수")
@@ -104,7 +87,6 @@ public class DataInitializer implements ApplicationRunner {
             return;
         }
 
-        // 토스상점 계좌 조회 (DataInitializer에서 생성된 계좌)
         accountRepository.findByAccountNumber("220-9876-5432").ifPresent(merchantAccount -> {
             MerchantSettlementPolicy policy = MerchantSettlementPolicy.create(
                     merchantAccount.getId(),
@@ -112,8 +94,10 @@ public class DataInitializer implements ApplicationRunner {
                     true,                        // 부가세 포함
                     1                            // D+1 정산
             );
+            // [변경] 실제 운영에서는 가맹점이 등록한 URL로 교체하세요
+            policy.updateWebhookUrl("https://mock.merchant.com/webhook");
             settlementPolicyRepository.save(policy);
-            log.info("[초기화] 가맹점 정산 정책 등록 - merchantId={}, feeRate=3.5%, VAT=포함, D+1",
+            log.info("[초기화] 가맹점 정산 정책 등록 - merchantId={}, feeRate=3.5%, VAT=포함, D+1, webhook=등록",
                     merchantAccount.getId());
         });
     }

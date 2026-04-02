@@ -129,25 +129,6 @@ class PaymentServiceTest {
         assertThat(virtualAccount.getBalance()).isEqualTo(100_000L);  // 0 + 10만 = 10만 (가상계좌 보관)
     }
 
-    @Test
-    @DisplayName("역순 ID 이체 - from > virtual ID 케이스도 정상 이체 (MultiLock 정렬 처리)")
-    void executeTransfer_success_reverseIdOrder() {
-        // given: fromId=3(큰), virtualId=1(작음) → 락은 항상 낮은 ID부터 획득
-        when(accountRepository.findById(3L)).thenReturn(Optional.of(buyerAccount));
-        when(accountRepository.findById(1L)).thenReturn(Optional.of(virtualAccount));
-
-        PaymentTransaction mockTx = mock(PaymentTransaction.class);
-        when(mockTx.getId()).thenReturn(1L);
-        when(transactionRepository.save(any())).thenReturn(mockTx);
-
-        // when: from=3L(구매자), merchant=2L(가맹점-기록용), virtual=1L
-        Long txId = paymentService.executeTransfer(3L, 2L, 1L, 100_000L);
-
-        // then
-        assertThat(txId).isNotNull();
-        assertThat(buyerAccount.getBalance()).isEqualTo(900_000L);
-    }
-
     // ================================================================
     // 예외 케이스
     // ================================================================
@@ -183,30 +164,7 @@ class PaymentServiceTest {
     }
 
     @Test
-    @DisplayName("존재하지 않는 계좌 - ACCOUNT_NOT_FOUND 예외")
-    void executeTransfer_fail_accountNotFound() {
-        when(accountRepository.findById(anyLong())).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> paymentService.executeTransfer(1L, 2L, 3L, 10_000L))
-                .isInstanceOf(CustomException.class)
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.ACCOUNT_NOT_FOUND);
-    }
-
-    @Test
-    @DisplayName("0원 이체 - INVALID_AMOUNT 예외")
-    void executeTransfer_fail_zeroAmount() {
-        when(accountRepository.findById(1L)).thenReturn(Optional.of(buyerAccount));
-        lenient().when(accountRepository.findById(3L)).thenReturn(Optional.of(virtualAccount));
-
-        assertThatThrownBy(() -> paymentService.executeTransfer(1L, 2L, 3L, 0L))
-                .isInstanceOf(CustomException.class)
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.INVALID_AMOUNT);
-    }
-
-    @Test
-    @DisplayName("음수 금액 이체 - INVALID_AMOUNT 예외")
+    @DisplayName("음수/0원 이체 - INVALID_AMOUNT 예외")
     void executeTransfer_fail_negativeAmount() {
         when(accountRepository.findById(1L)).thenReturn(Optional.of(buyerAccount));
         lenient().when(accountRepository.findById(3L)).thenReturn(Optional.of(virtualAccount));

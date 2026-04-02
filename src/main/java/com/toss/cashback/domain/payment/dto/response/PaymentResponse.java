@@ -15,18 +15,14 @@ public class PaymentResponse {
     private Long transactionId;         // 결제 트랜잭션 ID (영수증 번호)
     private PaymentStatus status;       // 결제 최종 상태
     private Long amount;                // 결제 금액 (원)
-    private Long cashbackAmount;        // 적립 캐시백 포인트 (0이면 예산 소진)
     private String message;             // 결과 안내 메시지
 
-    public static PaymentResponse success(Long transactionId, Long amount, Long cashbackAmount) {
+    public static PaymentResponse success(Long transactionId, Long amount) {
         return PaymentResponse.builder()
                 .transactionId(transactionId)
                 .status(PaymentStatus.SUCCESS)
                 .amount(amount)
-                .cashbackAmount(cashbackAmount)
-                .message(cashbackAmount > 0
-                        ? String.format("결제 성공! %,d포인트 캐시백이 적립되었습니다.", cashbackAmount)
-                        : "결제 성공! (캐시백 이벤트 예산이 소진되었습니다)")
+                .message("결제 성공! 정산은 D+1 ~ D+2 내에 가맹점으로 입금됩니다.")
                 .build();
     }
 }

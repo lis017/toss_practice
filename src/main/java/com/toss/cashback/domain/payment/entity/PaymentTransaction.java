@@ -59,8 +59,6 @@ public class PaymentTransaction {
     @Column(nullable = false)
     private Long amount;                    // 결제 금액 (원)
 
-    @Column(nullable = false)
-    private Long cashbackAmount;            // 실제 적립된 캐시백 (0이면 예산 소진)
 
     @Enumerated(EnumType.STRING)            // "PENDING", "SUCCESS" 등 문자열 저장 (가독성)
     @Column(nullable = false, length = 20)
@@ -82,14 +80,12 @@ public class PaymentTransaction {
         this.toAccountId = toAccountId;
         this.virtualAccountId = virtualAccountId;
         this.amount = amount;
-        this.cashbackAmount = 0L;
         this.status = PaymentStatus.PENDING;    // 초기 상태는 반드시 PENDING
     }
 
     /** 1단계 완료: 구매자 출금 성공 + 가상계좌 보관 중. 정산 스케줄러가 처리할 예정 */
-    public void markPendingSettlement(Long cashbackAmount) {
+    public void markPendingSettlement() {
         this.status = PaymentStatus.PENDING_SETTLEMENT;
-        this.cashbackAmount = cashbackAmount;   // 캐시백은 1단계에서 이미 지급 완료
     }
 
     /** 2단계 완료: 가맹점 정산 완료 → 결제 전체 완료. cashbackAmount는 이미 설정되어 있음 */

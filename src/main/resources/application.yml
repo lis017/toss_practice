@@ -83,10 +83,12 @@ lock:
     wait-seconds: 5
     lease-seconds: 10  # 단순 DB 연산이나 GC pause 필수 고려 (기존 3s → 10s, GC 최악 5s × 2배)
 
-# ======================== 캐시백 이벤트 설정 ========================
+# ======================== 웹훅 설정 ========================
+webhook:
+  simulate-error: false   # [변경] true로 설정하면 웹훅 발송 실패 시뮬레이션 (재시도 로직 확인용)
+
+# ======================== 결제 설정 ========================
 cashback:
-  budget:
-    total: 100000000    # [변경] 이벤트 총 예산 (현재 1억 원 = 100,000,000)
   external-bank:
     simulate-delay: false   # [테스트용] true로 변경 시 외부 은행 API 5초 지연 → 타임아웃 발동
     simulate-error: false   # [테스트용] true로 변경 시 외부 은행 API 에러 발동

@@ -76,7 +76,9 @@ public class SettlementCalculator {
                 fee.longValue(),
                 vat.longValue(),
                 netAmount,
-                expectedDate
+                expectedDate,
+                policy.getFeeRate(),        // 정책 스냅샷: 계산에 사용된 수수료율 그대로 보존
+                policy.isVatIncluded()      // 정책 스냅샷: 계산에 사용된 VAT 여부 그대로 보존
         );
     }
 }

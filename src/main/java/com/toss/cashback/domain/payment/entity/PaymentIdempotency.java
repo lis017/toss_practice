@@ -67,8 +67,6 @@ public class PaymentIdempotency {
     @Column(nullable = true)
     private Long amount;                    // 결제 금액 (COMPLETED 시 설정, 응답 재구성용)
 
-    @Column(nullable = true)
-    private Long cashbackAmount;            // 지급된 캐시백 금액 (COMPLETED 시 설정)
 
     @Column(nullable = false)
     private LocalDateTime createdAt;        // 최초 처리 시각
@@ -93,11 +91,10 @@ public class PaymentIdempotency {
      * 결제 완료 후 COMPLETED로 업데이트
      * 이후 동일 키 재요청 시 여기 저장된 결과를 바로 반환
      */
-    public void complete(Long transactionId, Long amount, Long cashbackAmount) {
+    public void complete(Long transactionId, Long amount) {
         this.status = IdempotencyStatus.COMPLETED;
         this.transactionId = transactionId;
         this.amount = amount;
-        this.cashbackAmount = cashbackAmount;
     }
 
     public boolean isCompleted() {
