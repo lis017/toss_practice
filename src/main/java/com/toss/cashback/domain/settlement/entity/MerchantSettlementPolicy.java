@@ -1,4 +1,4 @@
-package com.toss.cashback.domain.payment.entity;
+package com.toss.cashback.domain.settlement.entity;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -10,7 +10,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-// ======= [신규] 가맹점 정산 정책 엔티티 =======
+// ======= [6번] 가맹점 정산 정책 엔티티 =======
 /**
  * =====================================================================
  * [설계 의도] 가맹점별 정산 정책 - 수수료/VAT/정산주기 관리

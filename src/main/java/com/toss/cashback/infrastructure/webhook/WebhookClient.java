@@ -1,6 +1,6 @@
 package com.toss.cashback.infrastructure.webhook;
 
-// ======= [신규] 웹훅 HTTP 발송 인터페이스 =======
+// ======= [8번] 웹훅 HTTP 발송 인터페이스 =======
 /**
  * 가맹점 웹훅 발송 추상화 인터페이스.
  *

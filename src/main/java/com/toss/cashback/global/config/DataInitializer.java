@@ -2,8 +2,8 @@ package com.toss.cashback.global.config;
 
 import com.toss.cashback.domain.account.entity.Account;
 import com.toss.cashback.domain.account.repository.AccountRepository;
-import com.toss.cashback.domain.payment.entity.MerchantSettlementPolicy;
-import com.toss.cashback.domain.payment.repository.MerchantSettlementPolicyRepository;
+import com.toss.cashback.domain.settlement.entity.MerchantSettlementPolicy;
+import com.toss.cashback.domain.settlement.repository.MerchantSettlementPolicyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 
-// ======= [11번] 초기 데이터 세팅 (테스트 계좌 + 정산 정책) =======
+// ======= [15번] 초기 데이터 세팅 (테스트 계좌 + 정산 정책) =======
 /**
  * 서버 시작 시 초기 데이터 세팅. 운영 환경이면 Flyway로 대체해야 합니다.
  *

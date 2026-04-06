@@ -13,7 +13,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-// ======= [6번] Redisson 분산 락 서비스 =======
+// ======= [8번] Redisson 분산 락 서비스 =======
 /**
  * Redisson 분산 락 공통 서비스. 락 로직(tryLock/unlock)을 비즈니스 코드와 분리합니다.
  *

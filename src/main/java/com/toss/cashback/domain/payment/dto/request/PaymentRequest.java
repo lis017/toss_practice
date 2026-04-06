@@ -2,11 +2,13 @@ package com.toss.cashback.domain.payment.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-// ======= [11번] 결제 요청 DTO =======
+// ======= [15번] 결제 요청 DTO =======
 /**
  * 결제 요청 DTO
  *
@@ -22,7 +24,12 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class PaymentRequest {
 
-    @NotBlank(message = "멱등성 키는 필수입니다 (UUID 형식 권장)")
+    @NotBlank(message = "멱등성 키는 필수입니다")
+    @Size(max = 100, message = "멱등성 키 길이는 100자를 초과할 수 없습니다")
+    @Pattern(
+        regexp = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        message = "멱등성 키는 UUID 형식이어야 합니다"
+    )
     private String idempotencyKey;      // 중복 요청 방지 키 (클라이언트가 UUID로 생성)
 
     @NotNull(message = "송금 계좌 ID는 필수입니다")

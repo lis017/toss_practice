@@ -1,12 +1,12 @@
-package com.toss.cashback.domain.payment.scheduler;
+package com.toss.cashback.domain.settlement.scheduler;
 
-import com.toss.cashback.domain.payment.service.SettlementService;
+import com.toss.cashback.domain.settlement.service.SettlementService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-// ======= [신규] 정산 스케줄러 =======
+// ======= [11번] 정산 스케줄러 =======
 /**
  * PG 정산 스케줄러: 매일 새벽 2시에 PENDING 정산 건을 일괄 처리합니다.
  *

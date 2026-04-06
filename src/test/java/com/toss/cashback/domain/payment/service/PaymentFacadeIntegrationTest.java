@@ -7,7 +7,7 @@ import com.toss.cashback.domain.payment.entity.PaymentIdempotency;
 import com.toss.cashback.domain.payment.entity.PaymentTransaction;
 import com.toss.cashback.domain.payment.repository.PaymentIdempotencyRepository;
 import com.toss.cashback.domain.payment.repository.PaymentTransactionRepository;
-import com.toss.cashback.domain.payment.repository.SettlementRepository;
+import com.toss.cashback.domain.settlement.repository.SettlementRepository;
 import com.toss.cashback.global.error.CustomException;
 import com.toss.cashback.global.error.ErrorCode;
 import com.toss.cashback.infrastructure.api.ExternalBankService;
@@ -39,7 +39,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-// ======= [11번] PaymentFacade 통합 테스트 =======
+// ======= [16번] PaymentFacade 통합 테스트 =======
 /**
  * =====================================================================
  * PaymentFacade 통합 테스트 - 3가지 핵심 시나리오 검증

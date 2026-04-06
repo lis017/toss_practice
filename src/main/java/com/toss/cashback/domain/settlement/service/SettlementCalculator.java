@@ -1,7 +1,7 @@
-package com.toss.cashback.domain.payment.service;
+package com.toss.cashback.domain.settlement.service;
 
-import com.toss.cashback.domain.payment.entity.MerchantSettlementPolicy;
-import com.toss.cashback.domain.payment.entity.SettlementAmountResult;
+import com.toss.cashback.domain.settlement.entity.MerchantSettlementPolicy;
+import com.toss.cashback.domain.settlement.entity.SettlementAmountResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -9,7 +9,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 
-// ======= [신규] 정산 금액 계산기 =======
+// ======= [11번] 정산 금액 계산기 =======
 /**
  * =====================================================================
  * [설계 의도] 정산 금액 계산 - 수수료 / 부가세 / 실지급액

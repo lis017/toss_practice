@@ -1,4 +1,4 @@
-package com.toss.cashback.domain.payment.entity;
+package com.toss.cashback.domain.webhook.entity;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -8,7 +8,7 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
-// ======= [신규] 웹훅 발송 이력 엔티티 =======
+// ======= [7번] 웹훅 발송 이력 엔티티 =======
 /**
  * =====================================================================
  * [설계 의도] 웹훅 발송 이력 - 가맹점 수신 상태 추적

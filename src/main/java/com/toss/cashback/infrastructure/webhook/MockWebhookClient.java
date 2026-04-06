@@ -4,7 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-// ======= [신규] 웹훅 Mock 발송 구현체 =======
+// ======= [8번] 웹훅 Mock 발송 구현체 =======
 /**
  * 실제 HTTP 호출 없이 로그만 남기는 Mock 구현체.
  *

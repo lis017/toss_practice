@@ -66,7 +66,6 @@ management:
 #   - GC minor pause:        ~1s
 #   - GC full pause (G1GC):  ~5~10s  ← 핵심 변수
 #   → account(이체): GC 최악(10s) × 3배 여유 = 30s
-#   → cashback(단순 예산 조회):  GC 최악(5s) × 2배 여유 = 10s  (기존 3s는 GC pause 고려 시 위험)
 #
 # waitTime 산정 근거 (락 획득 대기 시간):
 #   - 동시 10건: 10 × 50ms = 500ms 대기
@@ -79,9 +78,6 @@ lock:
   account:
     wait-seconds: 5    # 락 획득 대기 시간 (초과 시 LOCK_ACQUISITION_FAILED)
     lease-seconds: 30  # 크래시/GC full pause 대비 자동 해제 시간 (GC 최악 10s × 3배)
-  cashback:
-    wait-seconds: 5
-    lease-seconds: 10  # 단순 DB 연산이나 GC pause 필수 고려 (기존 3s → 10s, GC 최악 5s × 2배)
 
 # ======================== 웹훅 설정 ========================
 webhook:

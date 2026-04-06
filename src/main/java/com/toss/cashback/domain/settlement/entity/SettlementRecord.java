@@ -1,4 +1,4 @@
-package com.toss.cashback.domain.payment.entity;
+package com.toss.cashback.domain.settlement.entity;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-// ======= [2번] 정산 레코드 엔티티 =======
+// ======= [6번] 정산 레코드 엔티티 =======
 /**
  * =====================================================================
  * [설계 의도] PG 정산 레코드 - 가상계좌 보관 → 가맹점 입금 이력 관리
@@ -67,7 +67,7 @@ public class SettlementRecord {
     private Long feeAmount;                 // 수수료 금액 (grossAmount × feeRate)
 
     @Column(nullable = false)
-    private Long vatAmount;                 // 부가세 금액 (feeAmount × 10%, vatIncluded=false면 0)
+    private Long vatAmount;                 // 부가세 금액 (vatIncluded=false면 0)
 
     @Column(nullable = false)
     private Long netAmount;                 // 실지급액 (grossAmount - feeAmount - vatAmount, 가맹점 수령액)

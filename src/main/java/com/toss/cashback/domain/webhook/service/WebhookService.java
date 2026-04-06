@@ -1,17 +1,16 @@
-package com.toss.cashback.domain.payment.service;
+package com.toss.cashback.domain.webhook.service;
 
-import com.toss.cashback.domain.payment.entity.MerchantSettlementPolicy;
-import com.toss.cashback.domain.payment.entity.WebhookDelivery;
-import com.toss.cashback.domain.payment.entity.WebhookDeliveryStatus;
-import com.toss.cashback.domain.payment.entity.WebhookEventType;
-import com.toss.cashback.domain.payment.repository.MerchantSettlementPolicyRepository;
-import com.toss.cashback.domain.payment.repository.WebhookDeliveryRepository;
+import com.toss.cashback.domain.settlement.entity.MerchantSettlementPolicy;
+import com.toss.cashback.domain.settlement.repository.MerchantSettlementPolicyRepository;
+import com.toss.cashback.domain.webhook.entity.WebhookDelivery;
+import com.toss.cashback.domain.webhook.entity.WebhookEventType;
+import com.toss.cashback.domain.webhook.repository.WebhookDeliveryRepository;
 import com.toss.cashback.infrastructure.webhook.WebhookClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-// ======= [신규] 웹훅 발송 서비스 =======
+// ======= [13번] 웹훅 발송 서비스 =======
 /**
  * =====================================================================
  * [설계 의도] 웹훅 발송 - 가맹점에게 결제 완료 이벤트 전달

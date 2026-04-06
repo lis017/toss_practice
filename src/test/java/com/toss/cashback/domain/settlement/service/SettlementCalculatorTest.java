@@ -1,7 +1,7 @@
-package com.toss.cashback.domain.payment.service;
+package com.toss.cashback.domain.settlement.service;
 
-import com.toss.cashback.domain.payment.entity.MerchantSettlementPolicy;
-import com.toss.cashback.domain.payment.entity.SettlementAmountResult;
+import com.toss.cashback.domain.settlement.entity.MerchantSettlementPolicy;
+import com.toss.cashback.domain.settlement.entity.SettlementAmountResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,7 +11,7 @@ import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-// ======= [신규] SettlementCalculator 단위 테스트 =======
+// ======= [12번] SettlementCalculator 단위 테스트 =======
 /**
  * =====================================================================
  * 정산 금액 계산기 단위 테스트 (Spring Context 없이 순수 Java)
@@ -89,15 +89,13 @@ class SettlementCalculatorTest {
     }
 
     // ===================================================================
-    // 케이스 4: HALF_EVEN(은행가 반올림) 검증
+    // 케이스 3: HALF_EVEN(은행가 반올림) 검증
     // ===================================================================
     /**
      * HALF_EVEN 동작 원리:
      * - 소수 정확히 0.5일 때 가까운 "짝수" 방향으로 반올림
      * - 10,000원 × 3.5% = 350.0000 → 정수이므로 반올림 없음
      * - 10,001원 × 3.5% = 350.035  → 0.5 미만 → 내림 → 350
-     * - 10,002원 × 3.5% = 350.07   → 0.5 초과 → 올림 → 350? No, 350.07 → 350
-     *   (setScale(0)이므로 0.07은 내림, 결과 350)
      * - 반올림 경계: 정확히 x.5인 경우 짝수로 → 350.5 → 350(짝수), 351.5 → 352(짝수)
      *
      * 여기서는 grossAmount=10,001로 소수 발생 케이스를 검증합니다.
@@ -124,5 +122,4 @@ class SettlementCalculatorTest {
         assertThat(grossAmount)
                 .isEqualTo(result.getFeeAmount() + result.getVatAmount() + result.getNetAmount());
     }
-
 }

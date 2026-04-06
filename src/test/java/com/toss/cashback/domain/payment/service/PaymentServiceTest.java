@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-// ======= [5번] 계좌 이체 서비스 단위 테스트 =======
+// ======= [10번] 계좌 이체 서비스 단위 테스트 =======
 /**
  * =====================================================================
  * PaymentService 단위 테스트 (Mockito)

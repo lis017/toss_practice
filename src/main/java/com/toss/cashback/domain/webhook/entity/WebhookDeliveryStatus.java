@@ -1,6 +1,6 @@
-package com.toss.cashback.domain.payment.entity;
+package com.toss.cashback.domain.webhook.entity;
 
-// ======= [신규] 웹훅 발송 상태 =======
+// ======= [7번] 웹훅 발송 상태 =======
 public enum WebhookDeliveryStatus {
     PENDING,    // 발송 전 (생성 직후)
     SUCCESS,    // 발송 성공 (1차 또는 재시도 성공)

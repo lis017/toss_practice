@@ -8,7 +8,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-// ======= [2번] 계좌 엔티티 =======
+// ======= [4번] 계좌 엔티티 =======
 /**
  * =====================================================================
  * [설계 의도] 계좌 도메인 엔티티 - 도메인 모델 패턴 적용
@@ -19,8 +19,8 @@ import lombok.NoArgsConstructor;
  * - Service 계층이 단순 "절차 호출자"로 유지 → 비즈니스 규칙의 Entity 응집
  *
  * 동시성 전략:
- * - 캐시백 예산: Redisson 분산 락으로 보호
- * - 계좌 이체: @Transactional + Dirty Checking으로 처리
+ * - 계좌 이체: Redisson MultiLock + TransactionTemplate으로 처리
+ * - 데드락 방지: 항상 낮은 락 키 순서로 획득
  *
  * 추후 리팩터:
  * - points를 별도 PointWallet 엔티티로 분리 → 단일 책임 원칙(SRP) 강화

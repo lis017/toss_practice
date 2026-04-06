@@ -9,7 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-// ======= [11번] 결제 API 컨트롤러 =======
+// ======= [15번] 결제 API 컨트롤러 =======
 /**
  * =====================================================================
  * [설계 의도] 결제 API 컨트롤러 - 얇은 컨트롤러(Thin Controller) 원칙
@@ -22,8 +22,8 @@ import org.springframework.web.bind.annotation.*;
  *
  * API 명세:
  * POST /api/v1/payments
- *   Body: { "fromAccountId": 1, "toAccountId": 2, "amount": 10000 }
- *   Response: { "transactionId": 1, "status": "SUCCESS", "cashbackAmount": 1000, ... }
+ *   Body: { "idempotencyKey": "uuid", "fromAccountId": 1, "toAccountId": 2, "amount": 10000 }
+ *   Response: { "transactionId": 1, "status": "SUCCESS", "amount": 10000, "message": "..." }
  * =====================================================================
  */
 @Slf4j
@@ -40,13 +40,10 @@ public class PaymentController {
      */
     @PostMapping("/payments")
     public ResponseEntity<PaymentResponse> pay(@RequestBody @Valid PaymentRequest request) {
-        // @Valid: fromAccountId(NotNull), toAccountId(NotNull), amount(NotNull+Positive) 검증
+        // @Valid: idempotencyKey(NotBlank/UUID), fromAccountId(NotNull), toAccountId(NotNull), amount(NotNull+Positive) 검증
         // 검증 실패 시 GlobalExceptionHandler.handleValidationException() 자동 호출
-        log.info("[API] POST /api/v1/payments 결제 요청 - from={}, to={}, amount={}",
-                request.getFromAccountId(), request.getToAccountId(), request.getAmount());
         log.info("[API] POST /api/v1/payments - from={}, to={}, amount={}",
                 request.getFromAccountId(), request.getToAccountId(), request.getAmount());
-
         return ResponseEntity.ok(paymentFacade.processPayment(request));
     }
 

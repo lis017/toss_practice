@@ -1,15 +1,15 @@
-package com.toss.cashback.domain.payment.service;
+package com.toss.cashback.domain.settlement.service;
 
 import com.toss.cashback.domain.account.entity.Account;
 import com.toss.cashback.domain.account.repository.AccountRepository;
-import com.toss.cashback.domain.payment.entity.MerchantSettlementPolicy;
-import com.toss.cashback.domain.payment.entity.SettlementAmountResult;
-import com.toss.cashback.domain.payment.entity.SettlementRecord;
-import com.toss.cashback.domain.payment.entity.SettlementStatus;
 import com.toss.cashback.domain.payment.entity.PaymentTransaction;
-import com.toss.cashback.domain.payment.repository.MerchantSettlementPolicyRepository;
 import com.toss.cashback.domain.payment.repository.PaymentTransactionRepository;
-import com.toss.cashback.domain.payment.repository.SettlementRepository;
+import com.toss.cashback.domain.settlement.entity.MerchantSettlementPolicy;
+import com.toss.cashback.domain.settlement.entity.SettlementAmountResult;
+import com.toss.cashback.domain.settlement.entity.SettlementRecord;
+import com.toss.cashback.domain.settlement.entity.SettlementStatus;
+import com.toss.cashback.domain.settlement.repository.MerchantSettlementPolicyRepository;
+import com.toss.cashback.domain.settlement.repository.SettlementRepository;
 import com.toss.cashback.global.error.CustomException;
 import com.toss.cashback.global.error.ErrorCode;
 import com.toss.cashback.infrastructure.api.ExternalBankService;
@@ -23,7 +23,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
 
-// ======= [신규] 정산 서비스 =======
+// ======= [11번] 정산 서비스 =======
 /**
  * 두 가지 역할:
  * 1. createSettlementRecord() - 결제 완료 시 정산 레코드 생성 (PaymentFacade 호출)

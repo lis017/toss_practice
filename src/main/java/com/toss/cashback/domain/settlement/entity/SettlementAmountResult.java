@@ -1,4 +1,4 @@
-package com.toss.cashback.domain.payment.entity;
+package com.toss.cashback.domain.settlement.entity;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-// ======= [신규] 정산 금액 계산 결과 (Value Object) =======
+// ======= [6번] 정산 금액 계산 결과 (Value Object) =======
 /**
  * SettlementCalculator.calculate()의 결과를 담는 불변 값 객체.
  *

@@ -9,7 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
-// ======= [10번] 멱등성 레코드 정리 스케줄러 =======
+// ======= [15번] 멱등성 레코드 정리 스케줄러 =======
 /**
  * =====================================================================
  * [설계 의도] 멱등성 레코드 만료 정리 스케줄러

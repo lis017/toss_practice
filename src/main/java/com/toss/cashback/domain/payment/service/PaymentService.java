@@ -16,12 +16,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
 
-// ======= [4번] 계좌 이체 서비스 =======
+// ======= [9번] 계좌 이체 서비스 =======
 /**
- * 계좌 이체 처리. C안 기준으로 트랜잭션을 2개로 분리합니다.
+ * 계좌 이체 처리. C안 기준으로 트랜잭션을 분리합니다.
  *
  * TX1(1단계 이체): 구매자(A) → 가상계좌(C) 자금 보관
- * TX4(상태 업데이트): 정산 완료 후 PaymentTransaction SUCCESS 처리
+ * TX-상태변경: 정산 완료 후 PaymentTransaction 상태 업데이트
  *
  * 외부 은행 승인(STEP 1)이 완료된 후에만 TX1이 실행됩니다.
  * TX1은 실제 자금 이동(A→C)만 담당하고, 최종 수신처(B)는 SettlementRecord에 기록합니다.
@@ -54,9 +54,9 @@ public class PaymentService {
      * 자금은 가상계좌(C)로 이동하고, PaymentTransaction에는 최종 수신처(가맹점 B)를 기록합니다.
      * 실제 가맹점 입금은 SettlementScheduler가 담당합니다.
      *
-     * @param fromAccountId    구매자 계좌 ID (A - 실제 출금 대상)
+     * @param fromAccountId     구매자 계좌 ID (A - 실제 출금 대상)
      * @param merchantAccountId 가맹점 계좌 ID (B - PaymentTransaction 기록용, 정산 수신처)
-     * @param virtualAccountId 가상계좌 ID (C - 실제 입금 대상, 정산 전 자금 보관)
+     * @param virtualAccountId  가상계좌 ID (C - 실제 입금 대상, 정산 전 자금 보관)
      * @return 생성된 PaymentTransaction ID (정산 레코드 연결용)
      */
     public Long executeTransfer(Long fromAccountId, Long merchantAccountId, Long virtualAccountId, Long amount) {
@@ -99,15 +99,6 @@ public class PaymentService {
                     return saved.getId();
                 })
         );
-    }
-
-    /** TX-정산완료: 가맹점 정산 완료 후 SUCCESS 상태로 변경 (cashbackAmount는 1단계에서 이미 기록됨) */
-    @Transactional
-    public void markTransactionSuccess(Long transactionId) {
-        PaymentTransaction transaction = transactionRepository.findById(transactionId)
-                .orElseThrow(() -> new CustomException(ErrorCode.INTERNAL_SERVER_ERROR));
-        transaction.markSuccess();
-        log.info("[TX-정산완료] 결제 최종 성공 - txId={}", transactionId);
     }
 
     /** TX-1단계완료: 구매자 출금 + 가상계좌 보관 완료. 정산 대기 상태로 변경 */
