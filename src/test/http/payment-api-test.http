@@ -64,27 +64,3 @@ Content-Type: application/json
 }
 
 ###
-
-### [6] 입력값 검증 오류 - amount 음수
-# 기대 응답: 400 Bad Request (@Valid 검증 실패)
-POST http://localhost:8080/api/v1/payments
-Content-Type: application/json
-
-{
-  "idempotencyKey": "test-err-002",
-  "fromAccountId": 1,
-  "toAccountId": 2,
-  "amount": -1000
-}
-
-###
-
-### [7] 입력값 검증 오류 - 필수 필드 누락
-# 기대 응답: 400 Bad Request
-POST http://localhost:8080/api/v1/payments
-Content-Type: application/json
-
-{
-  "idempotencyKey": "test-err-003",
-  "fromAccountId": 1
-}

@@ -23,9 +23,14 @@
 - 해결: 그냥 기다리면 됨. 터미널 클릭하거나 다른 창 누르면 프로세스 멈추는 것처럼 보이지만 계속 진행 중
 
 ### 포트 충돌 (Port already in use)
+- docker compose up --bulid 실패시.
 - 원인: 이전에 띄운 컨테이너가 남아있거나 로컬에 MySQL/Redis가 실행 중
 - 해결: `docker compose down` 후 다시 `docker compose up --build`
-- Docker Desktop에서 이전 컨테이너 수동 중지 후 실행
+- 해결2: # Linux/Mac
+sudo service mysql stop
+sudo systemctl stop mysql
+
+
 
 ### Docker Desktop 실행 안 한 채로 compose up
 - 원인: Docker Desktop이 꺼져 있으면 명령어 자체가 안 먹힘
@@ -55,3 +60,19 @@
 - 각 클래스 상단 `// ======= [N번] =======` 주석 전부 삭제
 - COMMIT_PLAN.md 삭제
 - ERROR_NOTES.md (이 파일) 삭제
+
+
+① Docker Compose 실행 시 'Port Already in Use' (포트 충돌)
+상황: VDI에 이미 다른 프로세스가 6379(Redis)나 5432(DB)를 쓰고 있을 때.
+
+해결: docker-compose.yml에서 왼쪽 포트 번호만 살짝 바꾸면 끝입니다. (예: 6379:6379 -> 16379:6379)
+
+② VDI 메모리 부족 (Build 실패)
+상황: ./gradlew build 하는데 Out of Memory 뜨면서 멈출 때.
+
+해결: gradle.properties 파일에 -Xmx2g 같은 메모리 제한 설정을 한 줄 넣는 법만 알아가세요.
+
+③ 라이브러리 다운로드 안 됨 (네트워크 차단)
+상황: VDI 폐쇄망 특성상 특정 레포지토리 접속이 안 될 때.
+
+해결: 보통 시험 시작 전 가이드에 "사내 Maven 레포지토리 설정법"을 줍니다. 그걸 복붙하는 게 답이지, 인터넷 찾아봤자 안 나옵니다.

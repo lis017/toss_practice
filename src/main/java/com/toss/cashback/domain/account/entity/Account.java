@@ -15,7 +15,7 @@ import lombok.NoArgsConstructor;
  * =====================================================================
  *
  * 도메인 모델 패턴:
- * - 비즈니스 로직(withdraw, deposit, addPoints)을 Entity 내부에 배치
+ * - 비즈니스 로직(withdraw, deposit)을 Entity 내부에 배치
  * - Service 계층이 단순 "절차 호출자"로 유지 → 비즈니스 규칙의 Entity 응집
  *
  * 동시성 전략:
@@ -23,8 +23,7 @@ import lombok.NoArgsConstructor;
  * - 데드락 방지: 항상 낮은 락 키 순서로 획득
  *
  * 추후 리팩터:
- * - points를 별도 PointWallet 엔티티로 분리 → 단일 책임 원칙(SRP) 강화
- * - balance/points 변경 이력 TransactionHistory 테이블 분리 → 감사 로그 강화
+ * - balance 변경 이력 TransactionHistory 테이블 분리 → 감사 로그 강화
  * - 계좌 상태(ACTIVE/SUSPENDED) Enum 컬럼 추가 → 계좌 정지 기능 확장
  * =====================================================================
  */
@@ -52,15 +51,11 @@ public class Account {
     @Column(nullable = false)
     private Long balance;                               // 현재 잔액 (원 단위)
 
-    @Column(nullable = false)
-    private Long points;                                // 보유 포인트 (캐시백 적립)
-
     @Builder
     public Account(String accountNumber, String ownerName, Long balance) {
         this.accountNumber = accountNumber;
         this.ownerName = ownerName;
         this.balance = balance;
-        this.points = 0L;                               // 포인트 초기값 0
     }
 
     // =====================================================================
@@ -81,14 +76,6 @@ public class Account {
     public void deposit(Long amount) {
         validatePositiveAmount(amount);
         this.balance += amount;                                 // Dirty Checking → 자동 UPDATE
-    }
-
-    // =====================================================================
-    // [비즈니스 로직] 캐시백 포인트 적립
-    // =====================================================================
-    public void addPoints(Long pointAmount) {
-        validatePositiveAmount(pointAmount);
-        this.points += pointAmount;                             // Dirty Checking → 자동 UPDATE
     }
 
     private void validatePositiveAmount(Long amount) {

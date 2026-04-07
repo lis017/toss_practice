@@ -83,7 +83,7 @@ public class PaymentFacade {
                 request.getFromAccountId(), request.getToAccountId(), request.getAmount(), request.getIdempotencyKey());
 
         // 멱등성 키 선등록: PROCESSING 상태로 먼저 저장 → 동시 중복 요청을 DB 제약으로 차단
-        PaymentIdempotency idempotencyRecord = getOrCreateIdempotencyRecord(request.getIdempotencyKey());
+        PaymentIdempotency idempotencyRecord = getOrCreateIdempotencyRecord(request);
 
         // COMPLETED 상태: 이미 완료된 동일 요청 → 저장된 결과 즉시 반환 (재처리 없음)
         if (idempotencyRecord.isCompleted()) {
@@ -165,30 +165,48 @@ public class PaymentFacade {
     }
 
     /**
-     * 멱등성 레코드 조회 또는 PROCESSING 상태로 신규 생성
+     * 멱등성 레코드 조회 또는 PROCESSING 상태로 신규 생성.
      *
-     * - 기존 COMPLETED: 캐시된 결과 반환용 레코드 그대로 반환
-     * - 기존 PROCESSING: 이미 처리 중인 동일 요청 → DUPLICATE_PAYMENT_REQUEST 예외
+     * 응답 정책:
+     * - 기존 COMPLETED + 동일 요청: 캐시된 결과 그대로 반환 (재처리 없음)
+     * - 기존 COMPLETED + 다른 요청: 409 IDEMPOTENCY_REQUEST_MISMATCH (위조 방지)
+     * - 기존 PROCESSING + 동일 요청: 409 DUPLICATE_PAYMENT_REQUEST (처리 중 안내)
+     * - 기존 PROCESSING + 다른 요청: 409 IDEMPOTENCY_REQUEST_MISMATCH (위조 방지)
      * - 신규: PROCESSING 상태로 saveAndFlush (unique constraint로 동시 중복 요청 차단)
      */
-    private PaymentIdempotency getOrCreateIdempotencyRecord(String idempotencyKey) {
+    private PaymentIdempotency getOrCreateIdempotencyRecord(PaymentRequest request) {
         PaymentIdempotency existing = idempotencyRepository
-                .findByIdempotencyKeyAndExpiresAtAfter(idempotencyKey, LocalDateTime.now())
+                .findByIdempotencyKeyAndExpiresAtAfter(request.getIdempotencyKey(), LocalDateTime.now())
                 .orElse(null);
 
         if (existing != null) {
-            if (existing.isCompleted()) {
-                return existing;
+            // [공통] 요청 내용 불일치 → 즉시 거부 (COMPLETED/PROCESSING 모두 동일)
+            if (!existing.matchesRequest(request.getFromAccountId(),
+                    request.getToAccountId(), request.getAmount())) {
+                log.warn("[멱등성] 요청 불일치 - key={}, 기존amount={}, 요청amount={}",
+                        request.getIdempotencyKey(), existing.getRequestAmount(), request.getAmount());
+                throw new CustomException(ErrorCode.IDEMPOTENCY_REQUEST_MISMATCH);
             }
-            log.warn("[멱등성] 처리 중인 중복 요청 - key={}", idempotencyKey);
+
+            if (existing.isCompleted()) {
+                return existing;  // 캐시된 완료 결과 반환
+            }
+
+            // PROCESSING + 동일 요청: 처리 중 중복 안내
+            log.warn("[멱등성] 처리 중인 중복 요청 - key={}", request.getIdempotencyKey());
             throw new CustomException(ErrorCode.DUPLICATE_PAYMENT_REQUEST);
         }
 
         try {
             return idempotencyRepository.saveAndFlush(
-                    PaymentIdempotency.createProcessing(idempotencyKey));
+                    PaymentIdempotency.createProcessing(
+                            request.getIdempotencyKey(),
+                            request.getFromAccountId(),
+                            request.getToAccountId(),
+                            request.getAmount()
+                    ));
         } catch (DataIntegrityViolationException e) {
-            log.warn("[멱등성] 동시 중복 요청 차단 - key={}", idempotencyKey);
+            log.warn("[멱등성] 동시 중복 요청 차단 - key={}", request.getIdempotencyKey());
             throw new CustomException(ErrorCode.DUPLICATE_PAYMENT_REQUEST);
         }
     }

@@ -1,8 +1,10 @@
 package com.toss.cashback.domain.payment.controller;
 
 import com.toss.cashback.domain.payment.dto.request.PaymentRequest;
+import com.toss.cashback.domain.payment.dto.response.PaymentQueryResponse;
 import com.toss.cashback.domain.payment.dto.response.PaymentResponse;
 import com.toss.cashback.domain.payment.service.PaymentFacade;
+import com.toss.cashback.domain.payment.service.PaymentQueryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +25,10 @@ import org.springframework.web.bind.annotation.*;
  * API 명세:
  * POST /api/v1/payments
  *   Body: { "idempotencyKey": "uuid", "fromAccountId": 1, "toAccountId": 2, "amount": 10000 }
- *   Response: { "transactionId": 1, "status": "SUCCESS", "amount": 10000, "message": "..." }
+ * GET /api/v1/payments/{transactionId}
+ *   Response: paymentStatus, settlementStatus, amount, failureReason, ...
+ * GET /api/v1/payments?idempotencyKey={key}
+ *   Response: 완료된 결제의 상태 조회 (COMPLETED 건만)
  * =====================================================================
  */
 @Slf4j
@@ -32,7 +37,8 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class PaymentController {
 
-    private final PaymentFacade paymentFacade;  // Facade 주입 (Service 직접 주입 지양)
+    private final PaymentFacade paymentFacade;
+    private final PaymentQueryService paymentQueryService;
 
     /**
      * 결제 요청 API
@@ -45,6 +51,32 @@ public class PaymentController {
         log.info("[API] POST /api/v1/payments - from={}, to={}, amount={}",
                 request.getFromAccountId(), request.getToAccountId(), request.getAmount());
         return ResponseEntity.ok(paymentFacade.processPayment(request));
+    }
+
+    /**
+     * 결제 상태 조회 API (transactionId 기준)
+     * GET /api/v1/payments/{transactionId}
+     *
+     * "클라이언트가 500 받았는데 결제가 실제로 됐는지" 확인용.
+     * paymentStatus + settlementStatus 함께 제공.
+     */
+    @GetMapping("/payments/{transactionId}")
+    public ResponseEntity<PaymentQueryResponse> getPayment(@PathVariable Long transactionId) {
+        log.info("[API] GET /api/v1/payments/{}", transactionId);
+        return ResponseEntity.ok(paymentQueryService.queryByTransactionId(transactionId));
+    }
+
+    /**
+     * 결제 상태 조회 API (idempotencyKey 기준)
+     * GET /api/v1/payments?idempotencyKey={key}
+     *
+     * 완료된 결제의 idempotencyKey로 결과 재조회 가능.
+     */
+    @GetMapping("/payments")
+    public ResponseEntity<PaymentQueryResponse> getPaymentByIdempotencyKey(
+            @RequestParam String idempotencyKey) {
+        log.info("[API] GET /api/v1/payments?idempotencyKey={}", idempotencyKey);
+        return ResponseEntity.ok(paymentQueryService.queryByIdempotencyKey(idempotencyKey));
     }
 
     /**

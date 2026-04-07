@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 // ======= [5번] 멱등성 레코드 엔티티 =======
 // 24시간 이후 동일 idempotencyKey로 재요청하면 새 결제로 처리됨에 주의
@@ -67,6 +68,18 @@ public class PaymentIdempotency {
     @Column(nullable = true)
     private Long amount;                    // 결제 금액 (COMPLETED 시 설정, 응답 재구성용)
 
+    // =====================================================================
+    // [요청 스냅샷] 최초 처리된 요청 내용 저장 → 동일 키 재요청 시 불일치 검증
+    // 같은 키 + 다른 요청 바디 → 409 IDEMPOTENCY_REQUEST_MISMATCH
+    // =====================================================================
+    @Column(nullable = true)
+    private Long requestFromAccountId;      // 최초 요청의 송금 계좌 ID
+
+    @Column(nullable = true)
+    private Long requestToAccountId;        // 최초 요청의 수신 계좌 ID
+
+    @Column(nullable = true)
+    private Long requestAmount;             // 최초 요청의 결제 금액
 
     @Column(nullable = false)
     private LocalDateTime createdAt;        // 최초 처리 시각
@@ -75,16 +88,34 @@ public class PaymentIdempotency {
     private LocalDateTime expiresAt;        // 만료 시각 (createdAt + 24시간), 이후 동일 키 재사용 허용
 
     /**
-     * 결제 처리 시작 시 PROCESSING 상태로 먼저 저장
-     * unique constraint 덕분에 동시 중복 요청 중 하나만 저장 성공
+     * 결제 처리 시작 시 PROCESSING 상태로 먼저 저장.
+     * 요청 스냅샷(from/to/amount)을 함께 저장 → 재요청 시 불일치 검증에 사용.
+     * unique constraint 덕분에 동시 중복 요청 중 하나만 저장 성공.
      */
-    public static PaymentIdempotency createProcessing(String idempotencyKey) {
+    public static PaymentIdempotency createProcessing(String idempotencyKey,
+                                                       Long fromAccountId,
+                                                       Long toAccountId,
+                                                       Long amount) {
         PaymentIdempotency record = new PaymentIdempotency();
         record.idempotencyKey = idempotencyKey;
         record.status = IdempotencyStatus.PROCESSING;
+        record.requestFromAccountId = fromAccountId;
+        record.requestToAccountId = toAccountId;
+        record.requestAmount = amount;
         record.createdAt = LocalDateTime.now();
-        record.expiresAt = record.createdAt.plusHours(24); // [변경] 보관 기간 (현재 24시간)
+        record.expiresAt = record.createdAt.plusHours(24);
         return record;
+    }
+
+    /**
+     * 동일 키 재요청 시 요청 내용 일치 여부 검증.
+     * 모두 일치하면 true (동일 요청 재시도) → 캐시된 응답 또는 진행 중 안내 반환.
+     * 하나라도 다르면 false (다른 요청 위조 시도) → 409 Conflict 반환.
+     */
+    public boolean matchesRequest(Long fromAccountId, Long toAccountId, Long amount) {
+        return Objects.equals(this.requestFromAccountId, fromAccountId)
+                && Objects.equals(this.requestToAccountId, toAccountId)
+                && Objects.equals(this.requestAmount, amount);
     }
 
     /**

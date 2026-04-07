@@ -21,6 +21,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import org.springframework.dao.DataIntegrityViolationException;
+
+import java.time.LocalDate;
 import java.util.List;
 
 // ======= [11번] 정산 서비스 =======
@@ -73,8 +76,20 @@ public class SettlementService {
                 });
 
         SettlementAmountResult calculation = settlementCalculator.calculate(grossAmount, policy);
-        SettlementRecord saved = settlementRepository.save(
-                SettlementRecord.createPending(paymentTransactionId, virtualAccountId, merchantAccountId, calculation));
+        SettlementRecord newRecord = SettlementRecord.createPending(
+                paymentTransactionId, virtualAccountId, merchantAccountId, calculation);
+
+        SettlementRecord saved;
+        try {
+            saved = settlementRepository.saveAndFlush(newRecord);
+        } catch (DataIntegrityViolationException e) {
+            // 동일 txId 정산 레코드가 이미 존재 (복구 동시 실행 등) → 기존 레코드 반환
+            log.info("[정산] paymentTransactionId {} 정산 레코드 이미 존재 (중복 방지) - 기존 레코드 반환",
+                    paymentTransactionId);
+            return settlementRepository.findByPaymentTransactionId(paymentTransactionId)
+                    .stream().findFirst()
+                    .orElseThrow(() -> new CustomException(ErrorCode.INTERNAL_SERVER_ERROR));
+        }
 
         log.info("[정산 등록] id={}, txId={}, gross={}, net={}, expectedDate={}",
                 saved.getId(), paymentTransactionId,
@@ -88,8 +103,10 @@ public class SettlementService {
      * 각 건은 독립적으로 처리 → 한 건 실패해도 나머지 건 계속 진행
      */
     public void processAllPendingSettlements() {
-        List<SettlementRecord> pendingList = settlementRepository.findByStatus(SettlementStatus.PENDING);
-        log.info("[정산 시작] PENDING 건수: {}", pendingList.size());
+        // expectedSettlementDate <= 오늘인 건만 처리 (D+1/D+2 정산 주기 준수)
+        List<SettlementRecord> pendingList = settlementRepository
+                .findByStatusAndExpectedSettlementDateLessThanEqual(SettlementStatus.PENDING, LocalDate.now());
+        log.info("[정산 시작] 오늘 정산 대상 PENDING 건수: {}", pendingList.size());
 
         int successCount = 0;
         int failCount = 0;

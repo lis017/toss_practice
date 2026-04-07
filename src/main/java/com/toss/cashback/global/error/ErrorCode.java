@@ -32,6 +32,12 @@ public enum ErrorCode {
     // ======================== P: 결제 요청 관련 에러 ========================
     DUPLICATE_PAYMENT_REQUEST(HttpStatus.OK, "P001", "이미 처리된 요청입니다 (멱등성 키 중복)"),
 
+    // 같은 멱등성 키인데 요청 바디가 다름 → 클라이언트 버그 또는 위조 시도
+    IDEMPOTENCY_REQUEST_MISMATCH(HttpStatus.CONFLICT, "P002",
+            "동일한 멱등성 키로 다른 요청 내용이 전송되었습니다. 키를 새로 생성하거나 동일한 요청 내용을 사용하세요"),
+
+    PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "P003", "결제 내역을 찾을 수 없습니다"),
+
     // ======================== CB: 서킷 브레이커 에러 ========================
     // 외부 은행 API가 반복 실패 → 서킷 Open 상태 → 즉시 차단 (불필요한 재시도 방지)
     CIRCUIT_BREAKER_OPEN(HttpStatus.SERVICE_UNAVAILABLE, "CB001", "외부 은행 서비스가 일시적으로 차단되었습니다. 잠시 후 다시 시도해주세요"),

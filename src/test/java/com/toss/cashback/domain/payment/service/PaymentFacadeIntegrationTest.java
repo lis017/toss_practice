@@ -3,11 +3,14 @@ package com.toss.cashback.domain.payment.service;
 import com.toss.cashback.domain.account.entity.Account;
 import com.toss.cashback.domain.account.repository.AccountRepository;
 import com.toss.cashback.domain.payment.dto.request.PaymentRequest;
+import com.toss.cashback.domain.payment.dto.response.PaymentResponse;
 import com.toss.cashback.domain.payment.entity.PaymentIdempotency;
+import com.toss.cashback.domain.payment.entity.PaymentStatus;
 import com.toss.cashback.domain.payment.entity.PaymentTransaction;
 import com.toss.cashback.domain.payment.repository.PaymentIdempotencyRepository;
 import com.toss.cashback.domain.payment.repository.PaymentTransactionRepository;
 import com.toss.cashback.domain.settlement.repository.SettlementRepository;
+import com.toss.cashback.domain.settlement.service.SettlementService;
 import com.toss.cashback.global.error.CustomException;
 import com.toss.cashback.global.error.ErrorCode;
 import com.toss.cashback.infrastructure.api.ExternalBankService;
@@ -17,10 +20,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -88,6 +93,9 @@ class PaymentFacadeIntegrationTest {
     @MockBean
     private ExternalBankService externalBankService;    // 외부 API 승인 결과 제어
 
+    @SpyBean
+    private SettlementService settlementService;        // 기본은 실제 동작, 특정 테스트에서 실패 주입
+
     private final ReentrantLock localLock = new ReentrantLock();
 
     private Long buyerAccountId;
@@ -112,6 +120,9 @@ class PaymentFacadeIntegrationTest {
 
         // 기본값: 외부 API 승인 성공 (각 테스트에서 필요 시 override)
         doNothing().when(externalBankService).approve(anyLong(), anyLong());
+
+        // @SpyBean 이전 테스트의 stub 초기화 (실패 주입 stub이 다음 테스트로 누출 방지)
+        Mockito.reset(settlementService);
 
         // 테스트 전용 계좌 생성 (UUID suffix로 테스트 간 accountNumber 충돌 방지)
         String suffix = UUID.randomUUID().toString().substring(0, 8);
@@ -229,6 +240,109 @@ class PaymentFacadeIntegrationTest {
                 idempotencyRepository.findByIdempotencyKeyAndExpiresAtAfter(idempotencyKey, LocalDateTime.now());
         assertThat(record).isPresent();
         assertThat(record.get().isCompleted()).isFalse();
+    }
+
+    // ===================================================================
+    // 시나리오 4: 이체 성공 + 후처리(정산 레코드 생성) 실패 → POST_PROCESS_FAILED
+    // ===================================================================
+    @Test
+    @DisplayName("[후처리 실패] 이체 성공 + 정산 레코드 생성 실패 → POST_PROCESS_FAILED 기록 + 멱등성 PROCESSING 유지")
+    void transferSuccess_settlementFail_postProcessFailedAndIdempotencyStaysProcessing() {
+        // SettlementService.createSettlementRecord가 DB 오류로 실패하는 상황 주입
+        doThrow(new RuntimeException("정산 DB 오류"))
+                .when(settlementService).createSettlementRecord(any(), any(), any(), any());
+
+        String idempotencyKey = UUID.randomUUID().toString();
+        // 잔액 100만 → 10만 이체 (STEP 2 이체는 성공, STEP 3 정산 레코드 생성에서 실패)
+        PaymentRequest request = buildRequest(idempotencyKey, buyerAccountId, merchantAccountId, 100_000L);
+
+        assertThatThrownBy(() -> paymentFacade.processPayment(request))
+                .isInstanceOf(CustomException.class);
+
+        // [핵심 검증 1] 이체는 완료됐으므로 구매자 잔액 차감 (가상계좌로 이동)
+        Account buyer = accountRepository.findById(buyerAccountId).orElseThrow();
+        assertThat(buyer.getBalance()).isEqualTo(900_000L);
+
+        // [핵심 검증 2] PaymentTransaction이 POST_PROCESS_FAILED 상태로 기록
+        // → 운영팀이 식별 가능 + PostProcessRecoveryScheduler가 자동 복구 대상으로 감지
+        List<PaymentTransaction> transactions =
+                transactionRepository.findByFromAccountIdOrderByCreatedAtDesc(buyerAccountId);
+        assertThat(transactions).hasSize(1);
+        assertThat(transactions.get(0).getStatus()).isEqualTo(PaymentStatus.POST_PROCESS_FAILED);
+
+        // [핵심 검증 3] 멱등성 레코드가 PROCESSING 유지 → 동일 key 재결제 차단 (이중 청구 방지)
+        // (은행 출금은 완료됐으나 내부 후처리 미완료 상태이므로 재시도 허용하면 이중 청구 위험)
+        Optional<PaymentIdempotency> record =
+                idempotencyRepository.findByIdempotencyKeyAndExpiresAtAfter(idempotencyKey, LocalDateTime.now());
+        assertThat(record).isPresent();
+        assertThat(record.get().isCompleted()).isFalse();
+    }
+
+    // ===================================================================
+    // 시나리오 5: 완료된 키로 동일 요청 재전송 → 캐시된 응답 반환 (잔액 1회만 차감)
+    // ===================================================================
+    @Test
+    @DisplayName("[멱등성 캐시] 완료된 키로 동일 요청 재전송 → 동일 transactionId 반환, 잔액 1회 차감")
+    void completedKey_sameRequest_returnsCachedResponse() {
+        String idempotencyKey = UUID.randomUUID().toString();
+        PaymentRequest request = buildRequest(idempotencyKey, buyerAccountId, merchantAccountId, 100_000L);
+
+        PaymentResponse first = paymentFacade.processPayment(request);
+        PaymentResponse second = paymentFacade.processPayment(request);   // 동일 요청 재전송
+
+        // [핵심] 두 번째도 동일 transactionId 반환 (재처리 없이 캐시에서 즉시)
+        assertThat(second.getTransactionId()).isEqualTo(first.getTransactionId());
+
+        // [핵심] 잔액은 1회만 차감 (멱등성 보장)
+        Account buyer = accountRepository.findById(buyerAccountId).orElseThrow();
+        assertThat(buyer.getBalance()).isEqualTo(900_000L);
+
+        // PaymentTransaction도 1건만 생성
+        assertThat(transactionRepository.findByFromAccountIdOrderByCreatedAtDesc(buyerAccountId)).hasSize(1);
+    }
+
+    // ===================================================================
+    // 시나리오 6: 완료된 키로 다른 금액 재요청 → 409 IDEMPOTENCY_REQUEST_MISMATCH
+    // ===================================================================
+    @Test
+    @DisplayName("[멱등성 불일치] 완료된 키로 다른 금액 재요청 → 409 IDEMPOTENCY_REQUEST_MISMATCH")
+    void completedKey_differentAmount_idempotencyRequestMismatch() {
+        // 첫 번째 결제 완료 (amount = 100,000)
+        String idempotencyKey = UUID.randomUUID().toString();
+        paymentFacade.processPayment(
+                buildRequest(idempotencyKey, buyerAccountId, merchantAccountId, 100_000L));
+
+        // 같은 키 + 다른 금액으로 재요청 (클라이언트 버그 또는 위조)
+        assertThatThrownBy(() -> paymentFacade.processPayment(
+                buildRequest(idempotencyKey, buyerAccountId, merchantAccountId, 200_000L)))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.IDEMPOTENCY_REQUEST_MISMATCH);
+
+        // 잔액은 첫 번째 결제만 차감 (두 번째 요청 차단됨)
+        Account buyer = accountRepository.findById(buyerAccountId).orElseThrow();
+        assertThat(buyer.getBalance()).isEqualTo(900_000L);
+    }
+
+    // ===================================================================
+    // 시나리오 7: PROCESSING 상태 키로 다른 요청 → 409 IDEMPOTENCY_REQUEST_MISMATCH
+    // ===================================================================
+    @Test
+    @DisplayName("[멱등성 불일치] PROCESSING 중인 키로 다른 계좌 재요청 → 409 IDEMPOTENCY_REQUEST_MISMATCH")
+    void processingKey_differentToAccount_idempotencyRequestMismatch() {
+        String idempotencyKey = UUID.randomUUID().toString();
+
+        // PROCESSING 레코드 직접 삽입 (toAccountId = merchantAccountId, amount = 100_000)
+        idempotencyRepository.save(
+                PaymentIdempotency.createProcessing(
+                        idempotencyKey, buyerAccountId, merchantAccountId, 100_000L));
+
+        // 같은 키 + 다른 toAccountId로 요청
+        assertThatThrownBy(() -> paymentFacade.processPayment(
+                buildRequest(idempotencyKey, buyerAccountId, buyerAccountId + 999L, 100_000L)))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.IDEMPOTENCY_REQUEST_MISMATCH);
     }
 
     // ===================================================================

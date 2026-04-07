@@ -47,7 +47,9 @@ public class SettlementRecord {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    // unique=true: 동일 결제에 대한 정산 레코드 중복 생성 방지
+    // 복구 스케줄러 + 수동 복구 동시 실행 시에도 DB 레벨에서 최종 안전장치
+    @Column(nullable = false, unique = true)
     private Long paymentTransactionId;      // 원본 결제 트랜잭션 ID (역추적용)
 
     @Column(nullable = false)
