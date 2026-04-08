@@ -6,6 +6,7 @@ import com.toss.cashback.domain.webhook.entity.WebhookDelivery;
 import com.toss.cashback.domain.webhook.entity.WebhookEventType;
 import com.toss.cashback.domain.webhook.repository.WebhookDeliveryRepository;
 import com.toss.cashback.infrastructure.webhook.WebhookClient;
+import com.toss.cashback.global.util.LogMaskUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -59,12 +60,16 @@ public class WebhookService {
             return;
         }
 
-        // 발송 이력 레코드 PENDING 상태로 생성
+        // [보안] webhookUrl 도메인만 로그 출력 (내부 API 경로 노출 방지)
+        log.info("[웹훅] 발송 준비 - txId={}, url={}", transactionId, LogMaskUtil.maskUrl(webhookUrl));
+
         WebhookDelivery delivery = WebhookDelivery.createPending(
                 transactionId, webhookUrl, WebhookEventType.PAYMENT_COMPLETED);
         deliveryRepository.save(delivery);
 
+        // [보안] payload 전체 로그 금지 (거래 금액 등 민감 정보 포함)
         String payload = buildPayload(transactionId, amount);
+        log.debug("[웹훅] payload 크기={}", LogMaskUtil.maskPayload(payload));
         attemptWithRetry(delivery, payload);
     }
 
@@ -76,11 +81,13 @@ public class WebhookService {
         try {
             webhookClient.send(delivery.getWebhookUrl(), payload);
             delivery.markSuccess();
-            log.info("[웹훅] 발송 성공 - txId={}", delivery.getPaymentTransactionId());
+            log.info("[웹훅] 발송 성공 - txId={}, url={}",
+                    delivery.getPaymentTransactionId(), LogMaskUtil.maskUrl(delivery.getWebhookUrl()));
 
         } catch (Exception firstEx) {
-            log.warn("[웹훅] 1차 실패 → 재시도 중 - txId={}, reason={}",
-                    delivery.getPaymentTransactionId(), firstEx.getMessage());
+            log.warn("[웹훅] 1차 실패 → 재시도 중 - txId={}, url={}, reason={}",
+                    delivery.getPaymentTransactionId(),
+                    LogMaskUtil.maskUrl(delivery.getWebhookUrl()), firstEx.getMessage());
             delivery.incrementRetryAndFail(firstEx.getMessage());
 
             try {

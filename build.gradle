@@ -30,6 +30,10 @@ dependencies {
     // ======================== 모니터링 ========================
     implementation 'org.springframework.boot:spring-boot-starter-actuator'       // /actuator/health 헬스체크용
 
+    // ======================== 보안 ========================
+    // /actuator/prometheus, /actuator/metrics 등 운영 엔드포인트 외부 노출 차단
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+
     // ======================== Redisson (분산 락) ========================
     // Spring Boot Starter 대신 직접 사용하여 커스텀 설정 완전 제어
     // 이유: redisson-spring-boot-starter는 자동 설정 시 커스텀 옵션 제한 있음

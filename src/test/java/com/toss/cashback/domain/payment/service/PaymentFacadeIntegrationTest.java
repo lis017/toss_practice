@@ -9,6 +9,11 @@ import com.toss.cashback.domain.payment.entity.PaymentStatus;
 import com.toss.cashback.domain.payment.entity.PaymentTransaction;
 import com.toss.cashback.domain.payment.repository.PaymentIdempotencyRepository;
 import com.toss.cashback.domain.payment.repository.PaymentTransactionRepository;
+import com.toss.cashback.domain.payment.recovery.entity.RecoveryAttempt;
+import com.toss.cashback.domain.payment.recovery.entity.RecoveryResult;
+import com.toss.cashback.domain.payment.recovery.entity.RecoveryTriggerType;
+import com.toss.cashback.domain.payment.recovery.repository.RecoveryAttemptRepository;
+import com.toss.cashback.domain.payment.recovery.service.RecoveryService;
 import com.toss.cashback.domain.settlement.repository.SettlementRepository;
 import com.toss.cashback.domain.settlement.service.SettlementService;
 import com.toss.cashback.global.error.CustomException;
@@ -84,6 +89,12 @@ class PaymentFacadeIntegrationTest {
     @Autowired
     private SettlementRepository settlementRepository;
 
+    @Autowired
+    private RecoveryService recoveryService;
+
+    @Autowired
+    private RecoveryAttemptRepository recoveryAttemptRepository;
+
     @MockBean
     private RedissonClient redissonClient;              // RedissonConfig의 실제 Redis 연결 차단
 
@@ -140,6 +151,7 @@ class PaymentFacadeIntegrationTest {
 
     @AfterEach
     void tearDown() {
+        recoveryAttemptRepository.deleteAll();
         settlementRepository.deleteAll();
         transactionRepository.deleteAll();
         idempotencyRepository.deleteAll();
@@ -343,6 +355,94 @@ class PaymentFacadeIntegrationTest {
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.IDEMPOTENCY_REQUEST_MISMATCH);
+    }
+
+    // ===================================================================
+    // 시나리오 8: POST_PROCESS_FAILED → 자동 복구 → PENDING_SETTLEMENT 전이
+    // ===================================================================
+    @Test
+    @DisplayName("[복구 통합] POST_PROCESS_FAILED → AUTO 복구 → PENDING_SETTLEMENT + RecoveryAttempt SUCCESS 저장")
+    void postProcessFailed_autoRecovery_transitionsToPendingSettlement() {
+        // [1] 정산 레코드 생성을 강제로 실패시켜 POST_PROCESS_FAILED 유발
+        doThrow(new RuntimeException("정산 DB 오류"))
+                .when(settlementService).createSettlementRecord(any(), any(), any(), any());
+
+        assertThatThrownBy(() -> paymentFacade.processPayment(
+                buildRequest(UUID.randomUUID().toString(), buyerAccountId, merchantAccountId, 100_000L)))
+                .isInstanceOf(CustomException.class);
+
+        // [2] SpyBean 초기화 → 이후 복구 시 정산 레코드 실제 생성 가능
+        Mockito.reset(settlementService);
+        doNothing().when(externalBankService).approve(anyLong(), anyLong());
+
+        Long txId = transactionRepository.findByFromAccountIdOrderByCreatedAtDesc(buyerAccountId)
+                .get(0).getId();
+        assertThat(transactionRepository.findById(txId).orElseThrow().getStatus())
+                .isEqualTo(PaymentStatus.POST_PROCESS_FAILED);
+
+        // [3] 자동 복구 실행 (PostProcessRecoveryScheduler가 호출하는 방식과 동일)
+        recoveryService.recover(txId, RecoveryTriggerType.AUTO);
+
+        // [핵심 검증 1] 상태 전이: POST_PROCESS_FAILED → PENDING_SETTLEMENT
+        assertThat(transactionRepository.findById(txId).orElseThrow().getStatus())
+                .isEqualTo(PaymentStatus.PENDING_SETTLEMENT);
+
+        // [핵심 검증 2] 정산 레코드 재생성 확인
+        assertThat(settlementRepository.findByPaymentTransactionId(txId)).hasSize(1);
+
+        // [핵심 검증 3] RecoveryAttempt AUTO SUCCESS 이력 저장
+        List<RecoveryAttempt> attempts =
+                recoveryAttemptRepository.findByPaymentTransactionIdOrderByAttemptedAtDesc(txId);
+        assertThat(attempts).hasSize(1);
+        assertThat(attempts.get(0).getTriggerType()).isEqualTo(RecoveryTriggerType.AUTO);
+        assertThat(attempts.get(0).getResult()).isEqualTo(RecoveryResult.SUCCESS);
+        assertThat(attempts.get(0).getFailureReason()).isNull();
+    }
+
+    // ===================================================================
+    // 시나리오 9: POST_PROCESS_FAILED → 수동 복구 → MANUAL RecoveryAttempt + 재복구 no-op
+    // ===================================================================
+    @Test
+    @DisplayName("[복구 통합] POST_PROCESS_FAILED → MANUAL 복구 → MANUAL RecoveryAttempt + 재복구 no-op 멱등성")
+    void postProcessFailed_manualRecovery_savesManualAttemptAndNoOpOnSecondCall() {
+        // [1] POST_PROCESS_FAILED 유발
+        doThrow(new RuntimeException("정산 DB 오류"))
+                .when(settlementService).createSettlementRecord(any(), any(), any(), any());
+
+        assertThatThrownBy(() -> paymentFacade.processPayment(
+                buildRequest(UUID.randomUUID().toString(), buyerAccountId, merchantAccountId, 100_000L)))
+                .isInstanceOf(CustomException.class);
+
+        Mockito.reset(settlementService);
+        doNothing().when(externalBankService).approve(anyLong(), anyLong());
+
+        Long txId = transactionRepository.findByFromAccountIdOrderByCreatedAtDesc(buyerAccountId)
+                .get(0).getId();
+
+        // [2] 수동 복구 실행 (운영자 API 호출과 동일)
+        recoveryService.recover(txId, RecoveryTriggerType.MANUAL);
+
+        // MANUAL RecoveryAttempt 저장 확인
+        List<RecoveryAttempt> attempts =
+                recoveryAttemptRepository.findByPaymentTransactionIdOrderByAttemptedAtDesc(txId);
+        assertThat(attempts).hasSize(1);
+        assertThat(attempts.get(0).getTriggerType()).isEqualTo(RecoveryTriggerType.MANUAL);
+        assertThat(attempts.get(0).getResult()).isEqualTo(RecoveryResult.SUCCESS);
+
+        // [3] 이미 복구된 건 재복구 요청 → no-op + SUCCESS attempt 추가 저장 (멱등성)
+        recoveryService.recover(txId, RecoveryTriggerType.MANUAL);
+
+        // no-op도 attempt 기록 (감사 로그)
+        List<RecoveryAttempt> attemptsAfterNoOp =
+                recoveryAttemptRepository.findByPaymentTransactionIdOrderByAttemptedAtDesc(txId);
+        assertThat(attemptsAfterNoOp).hasSize(2);
+
+        // 두 번째 attempt: no-op이지만 SUCCESS로 기록
+        assertThat(attemptsAfterNoOp.get(0).getResult()).isEqualTo(RecoveryResult.SUCCESS);
+
+        // [핵심] 트랜잭션 상태는 PENDING_SETTLEMENT 그대로 (no-op이 상태 바꾸지 않음)
+        assertThat(transactionRepository.findById(txId).orElseThrow().getStatus())
+                .isEqualTo(PaymentStatus.PENDING_SETTLEMENT);
     }
 
     // ===================================================================

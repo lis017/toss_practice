@@ -9,6 +9,7 @@ import com.toss.cashback.domain.settlement.service.SettlementService;
 import com.toss.cashback.domain.webhook.service.WebhookService;
 import com.toss.cashback.global.error.CustomException;
 import com.toss.cashback.global.error.ErrorCode;
+import com.toss.cashback.global.util.LogMaskUtil;
 import com.toss.cashback.infrastructure.api.ExternalBankService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -79,8 +80,10 @@ public class PaymentFacade {
     }
 
     public PaymentResponse processPayment(PaymentRequest request) {
+        // [보안] idempotencyKey 앞 6자리만 출력 (전체 로그 노출 방지)
         log.info("[결제 시작] from={}, to={}, amount={}, key={}",
-                request.getFromAccountId(), request.getToAccountId(), request.getAmount(), request.getIdempotencyKey());
+                request.getFromAccountId(), request.getToAccountId(), request.getAmount(),
+                LogMaskUtil.maskKey(request.getIdempotencyKey()));
 
         // 멱등성 키 선등록: PROCESSING 상태로 먼저 저장 → 동시 중복 요청을 DB 제약으로 차단
         PaymentIdempotency idempotencyRecord = getOrCreateIdempotencyRecord(request);
@@ -88,7 +91,7 @@ public class PaymentFacade {
         // COMPLETED 상태: 이미 완료된 동일 요청 → 저장된 결과 즉시 반환 (재처리 없음)
         if (idempotencyRecord.isCompleted()) {
             log.info("[멱등성] 완료된 중복 요청 반환 - key={}, txId={}",
-                    request.getIdempotencyKey(), idempotencyRecord.getTransactionId());
+                    LogMaskUtil.maskKey(request.getIdempotencyKey()), idempotencyRecord.getTransactionId());
             return PaymentResponse.success(
                     idempotencyRecord.getTransactionId(),
                     idempotencyRecord.getAmount()
@@ -119,8 +122,10 @@ public class PaymentFacade {
         } catch (Exception e) {
             // [긴급] 외부 은행 승인은 완료됐으나 DB 이체 실패 → 자금 불일치 가능성
             // 멱등성 레코드 PROCESSING 유지 → 동일 키로 재결제 차단 (이중 청구 방지)
+            // [보안] key 마스킹 처리
             log.error("[긴급-STEP2실패] 외부 승인 완료 후 이체 실패 - from={}, amount={}, key={}, error={}",
-                    request.getFromAccountId(), request.getAmount(), request.getIdempotencyKey(), e.getMessage());
+                    request.getFromAccountId(), request.getAmount(),
+                    LogMaskUtil.maskKey(request.getIdempotencyKey()), e.getMessage());
             log.error("[복구 가이드] 1) 외부 은행에 해당 승인 건 실제 처리 여부 확인" +
                     " 2) 출금 확인됐다면 수동 이체 처리 또는 외부 은행 승인 취소 요청");
             throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
@@ -183,8 +188,10 @@ public class PaymentFacade {
             // [공통] 요청 내용 불일치 → 즉시 거부 (COMPLETED/PROCESSING 모두 동일)
             if (!existing.matchesRequest(request.getFromAccountId(),
                     request.getToAccountId(), request.getAmount())) {
-                log.warn("[멱등성] 요청 불일치 - key={}, 기존amount={}, 요청amount={}",
-                        request.getIdempotencyKey(), existing.getRequestAmount(), request.getAmount());
+                // [보안] key 전체 출력 금지
+            log.warn("[멱등성] 요청 불일치 - key={}, 기존amount={}, 요청amount={}",
+                        LogMaskUtil.maskKey(request.getIdempotencyKey()),
+                        existing.getRequestAmount(), request.getAmount());
                 throw new CustomException(ErrorCode.IDEMPOTENCY_REQUEST_MISMATCH);
             }
 
@@ -193,7 +200,7 @@ public class PaymentFacade {
             }
 
             // PROCESSING + 동일 요청: 처리 중 중복 안내
-            log.warn("[멱등성] 처리 중인 중복 요청 - key={}", request.getIdempotencyKey());
+            log.warn("[멱등성] 처리 중인 중복 요청 - key={}", LogMaskUtil.maskKey(request.getIdempotencyKey()));
             throw new CustomException(ErrorCode.DUPLICATE_PAYMENT_REQUEST);
         }
 
@@ -206,7 +213,7 @@ public class PaymentFacade {
                             request.getAmount()
                     ));
         } catch (DataIntegrityViolationException e) {
-            log.warn("[멱등성] 동시 중복 요청 차단 - key={}", request.getIdempotencyKey());
+            log.warn("[멱등성] 동시 중복 요청 차단 - key={}", LogMaskUtil.maskKey(request.getIdempotencyKey()));
             throw new CustomException(ErrorCode.DUPLICATE_PAYMENT_REQUEST);
         }
     }
